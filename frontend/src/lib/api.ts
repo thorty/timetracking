@@ -42,17 +42,17 @@ export const api = {
       fetchApi<void>(`/todos/${id}`, { method: 'DELETE' }),
   },
   timeEntries: {
-    getAll: () => fetchApi<TimeEntry[]>('/time-entries'),
+    getAll: () => fetchApi<TimeEntry[]>('/timeentries'),
     create: (data: { todo_id: number; duration: number }) =>
-      fetchApi<TimeEntry>('/time-entries', { 
+      fetchApi<TimeEntry>('/timeentries', { 
         method: 'POST', 
         body: JSON.stringify(data) 
       }),
   },
   pomodoroSettings: {
-    get: () => fetchApi<PomodoroSettings>('/settings/pomodoro'),
+    get: () => fetchApi<PomodoroSettings>('/settings'),
     update: (data: PomodoroSettings) =>
-      fetchApi<PomodoroSettings>('/settings/pomodoro', { 
+      fetchApi<PomodoroSettings>('/settings', { 
         method: 'PUT', 
         body: JSON.stringify(data) 
       }),

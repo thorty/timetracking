@@ -1714,14 +1714,1040 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
 ---
 
-## Nächste Phasen (Kurzübersicht)
+## Phase 3: Timer Feature (Frontend)
 
-**Phase 3:** Timer Feature (Timer Component + TrackerPage)  
-**Phase 4:** TimeEntries Feature (TimeEntryList Component)  
-**Phase 5:** Stats Feature (StatsPage mit Charts)  
-**Phase 6:** Pomodoro Settings (Settings Modal)  
-**Phase 7:** Polish & Optimierungen
+**Ziel:** Pomodoro-Timer implementieren mit Todo-Auswahl und automatischer TimeEntry-Erstellung
+
+**Wichtig:** Phase 2 muss abgeschlossen sein (Projects + Tasks funktionieren)
+
+**Was wird gemacht:**
+
+1. **framer-motion installieren** (jetzt erst, da in Phase 3 benötigt für Animationen)
+2. **Timer Component** erstellen mit:
+   - Kreisförmiger Progress-Indikator (SVG Circle)
+   - Start/Pause/Stop Buttons
+   - Focus/Break Modes (25 Min / 5 Min)
+   - useEffect für Countdown-Timer
+   - framer-motion für smooth Animationen
+3. **TodoSelector Component** erstellen:
+   - Dropdown mit allen aktiven Tasks
+   - Gruppiert nach Projekt (mit Farbdot)
+   - "No task selected" State
+4. **TrackerPage** implementieren:
+   - Timer + TodoSelector zusammenführen
+   - TimeEntry beim Timer-Stop automatisch erstellen
+   - Quote-Display (optional motivational quote)
+5. **App.tsx Update:** TrackerPage auf `/` Route einbinden
+
+**Flow:**
+1. User navigiert zu Tracker (/)
+2. Wählt Task aus TodoSelector
+3. Startet Timer → Countdown beginnt
+4. Timer läuft ab oder User stoppt → TimeEntry wird erstellt mit:
+   - `todo_id` (ausgewählter Task)
+   - `project_id` (vom Task)
+   - `duration` (verstrichene Sekunden)
+   - `timestamp` (aktueller Zeitpunkt)
+5. StoreContext refreshTimeEntries() → Daten aktuell
+
+**Dependencies:**
+- framer-motion: Für smooth Timer-Animationen (Circle Progress)
+- Bestehendes: useStore (Todos + PomodoroSettings), api.timeEntries.create()
+
+**Code-Struktur:**
+- `components/Timer.tsx` + `Timer.module.css` (Core Timer Logic)
+- `components/TodoSelector.tsx` + `TodoSelector.module.css` (Task Dropdown)
+- `pages/TrackerPage.tsx` + `TrackerPage.module.css` (Zusammenführung)
+- `App.tsx` Update (Route `/` → TrackerPage statt Placeholder)
 
 ---
 
-Soll ich mit **Phase 3 (Timer)** weitermachen?
+### 3.1 Dependencies Installation
+
+**Jetzt framer-motion installieren** (wurde in Phase 1 übersprungen):
+
+```bash
+cd frontend
+npm install framer-motion
+```
+
+### 3.2 Timer Component
+
+**components/Timer.tsx:**
+```typescript
+import { useState, useEffect } from 'react';
+import { Play, Pause, Square } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Button from './ui/Button';
+import styles from './Timer.module.css';
+
+type TimerMode = 'focus' | 'break';
+
+interface TimerProps {
+  focusDuration: number; // in Minuten
+  breakDuration: number; // in Minuten
+  onComplete: (elapsedSeconds: number) => void;
+}
+
+export default function Timer({ focusDuration, breakDuration, onComplete }: TimerProps) {
+  const [mode, setMode] = useState<TimerMode>('focus');
+  const [secondsLeft, setSecondsLeft] = useState(focusDuration * 60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [totalSeconds, setTotalSeconds] = useState(focusDuration * 60);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const currentDuration = mode === 'focus' ? focusDuration : breakDuration;
+  const progress = ((totalSeconds - secondsLeft) / totalSeconds) * 100;
+
+  // Timer countdown
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setIsRunning(false);
+          // Timer completed
+          if (mode === 'focus') {
+            onComplete(elapsedSeconds + 1);
+            setElapsedSeconds(0);
+          }
+          return 0;
+        }
+        setElapsedSeconds((e) => e + 1);
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRunning, mode, elapsedSeconds, onComplete]);
+
+  // Mode change effect
+  useEffect(() => {
+    const duration = mode === 'focus' ? focusDuration : breakDuration;
+    setTotalSeconds(duration * 60);
+    setSecondsLeft(duration * 60);
+    setElapsedSeconds(0);
+    setIsRunning(false);
+  }, [mode, focusDuration, breakDuration]);
+
+  const handleStart = () => setIsRunning(true);
+  const handlePause = () => setIsRunning(false);
+  
+  const handleStop = () => {
+    if (mode === 'focus' && elapsedSeconds > 0) {
+      onComplete(elapsedSeconds);
+    }
+    setIsRunning(false);
+    setSecondsLeft(totalSeconds);
+    setElapsedSeconds(0);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const circumference = 2 * Math.PI * 120; // radius 120
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className={styles.timer}>
+      {/* Mode Toggle */}
+      <div className={styles.modeToggle}>
+        <button
+          className={`${styles.modeBtn} ${mode === 'focus' ? styles.active : ''}`}
+          onClick={() => setMode('focus')}
+          disabled={isRunning}
+        >
+          Focus ({focusDuration} min)
+        </button>
+        <button
+          className={`${styles.modeBtn} ${mode === 'break' ? styles.active : ''}`}
+          onClick={() => setMode('break')}
+          disabled={isRunning}
+        >
+          Break ({breakDuration} min)
+        </button>
+      </div>
+
+      {/* Timer Circle */}
+      <div className={styles.circle}>
+        <svg className={styles.svg} viewBox="0 0 250 250">
+          {/* Background circle */}
+          <circle
+            cx="125"
+            cy="125"
+            r="120"
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth="8"
+          />
+          {/* Progress circle */}
+          <motion.circle
+            cx="125"
+            cy="125"
+            r="120"
+            fill="none"
+            stroke={mode === 'focus' ? '#6366f1' : '#10b981'}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            transform="rotate(-90 125 125)"
+            initial={false}
+            animate={{ strokeDashoffset }}
+            transition={{ duration: 0.3 }}
+          />
+        </svg>
+        <div className={styles.timeDisplay}>
+          <span className={styles.time}>{formatTime(secondsLeft)}</span>
+          <span className={styles.label}>{mode === 'focus' ? 'Focus' : 'Break'}</span>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className={styles.controls}>
+        {!isRunning ? (
+          <Button size="lg" onClick={handleStart}>
+            <Play size={24} />
+            Start
+          </Button>
+        ) : (
+          <>
+            <Button size="lg" variant="secondary" onClick={handlePause}>
+              <Pause size={24} />
+              Pause
+            </Button>
+            <Button size="lg" variant="destructive" onClick={handleStop}>
+              <Square size={24} />
+              Stop
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+**components/Timer.module.css:**
+```css
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.modeToggle {
+  display: flex;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+}
+
+.modeBtn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modeBtn:hover:not(:disabled) {
+  background: white;
+  color: #0f172a;
+}
+
+.modeBtn.active {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.modeBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.circle {
+  position: relative;
+  width: 250px;
+  height: 250px;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+}
+
+.timeDisplay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.time {
+  display: block;
+  font-size: 3rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.label {
+  display: block;
+  font-size: 1rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+}
+```
+
+### 3.3 TodoSelector Component
+
+**components/TodoSelector.tsx:**
+```typescript
+import { useStore } from '@/context/StoreContext';
+import { COLORS } from '@/lib/utils';
+import Select from './ui/Select';
+import styles from './TodoSelector.module.css';
+
+interface TodoSelectorProps {
+  selectedTodoId: number | null;
+  onChange: (todoId: number | null) => void;
+}
+
+export default function TodoSelector({ selectedTodoId, onChange }: TodoSelectorProps) {
+  const { projects, todos } = useStore();
+
+  const activeTodos = todos.filter(t => t.status !== 'done');
+  
+  return (
+    <div className={styles.selector}>
+      <label className={styles.label}>Select a task to track</label>
+      <Select
+        value={selectedTodoId?.toString() || ''}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">No task selected</option>
+        {projects.map(project => {
+          const projectTodos = activeTodos.filter(t => t.project_id === project.id);
+          if (projectTodos.length === 0) return null;
+
+          const colorHex = COLORS.find(c => c.name === project.color)?.hex || '#6366f1';
+
+          return (
+            <optgroup key={project.id} label={project.name}>
+              {projectTodos.map(todo => (
+                <option key={todo.id} value={todo.id}>
+                  {todo.title}
+                </option>
+              ))}
+            </optgroup>
+          );
+        })}
+      </Select>
+      
+      {activeTodos.length === 0 && (
+        <p className={styles.empty}>
+          No active tasks. Create a project and add tasks first.
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+**components/TodoSelector.module.css:**
+```css
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.empty {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.375rem;
+}
+```
+
+### 3.4 TrackerPage
+
+**pages/TrackerPage.tsx:**
+```typescript
+import { useState } from 'react';
+import { useStore } from '@/context/StoreContext';
+import { api } from '@/lib/api';
+import Timer from '@/components/Timer';
+import TodoSelector from '@/components/TodoSelector';
+import Card from '@/components/ui/Card';
+import styles from './TrackerPage.module.css';
+
+export default function TrackerPage() {
+  const { pomodoroSettings, refreshTimeEntries, todos } = useStore();
+  const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+
+  const handleTimerComplete = async (elapsedSeconds: number) => {
+    if (!selectedTodoId) {
+      alert('Please select a task to track time for!');
+      return;
+    }
+
+    const selectedTodo = todos.find(t => t.id === selectedTodoId);
+    if (!selectedTodo) return;
+
+    try {
+      await api.timeEntries.create({
+        todo_id: selectedTodoId,
+        duration: elapsedSeconds,
+      });
+      await refreshTimeEntries();
+      console.log(`✅ Time entry created: ${elapsedSeconds}s for task #${selectedTodoId}`);
+    } catch (error) {
+      console.error('Failed to create time entry:', error);
+      alert('Failed to save time entry');
+    }
+  };
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Focus Timer</h1>
+        <p className={styles.subtitle}>Track your work with the Pomodoro Technique</p>
+      </div>
+
+      <Card className={styles.card}>
+        <div className={styles.content}>
+          <TodoSelector
+            selectedTodoId={selectedTodoId}
+            onChange={setSelectedTodoId}
+          />
+          
+          <Timer
+            focusDuration={pomodoroSettings.focus_duration}
+            breakDuration={pomodoroSettings.break_duration}
+            onComplete={handleTimerComplete}
+          />
+        </div>
+      </Card>
+
+      {selectedTodoId && (
+        <div className={styles.info}>
+          <p>Timer will track time for: <strong>{todos.find(t => t.id === selectedTodoId)?.title}</strong></p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**pages/TrackerPage.module.css:**
+```css
+.page {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #64748b;
+}
+
+.card {
+  padding: 2rem;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.info {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  color: #64748b;
+}
+
+.info strong {
+  color: #0f172a;
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+  }
+}
+```
+
+### 3.5 App.tsx Update (Phase 3 Version)
+
+**App.tsx (VOLLSTÄNDIG - ersetzt Phase 2 Version):**
+```typescript
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { StoreProvider } from './context/StoreContext';
+import Layout from './components/Layout';
+import TrackerPage from './pages/TrackerPage';
+import TodosPage from './pages/TodosPage';
+import styles from './App.module.css';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <StoreProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<TrackerPage />} />
+            <Route path="/todos" element={<TodosPage />} />
+            <Route path="/stats" element={<div className={styles.placeholder}>Stats Page</div>} />
+          </Routes>
+        </Layout>
+      </StoreProvider>
+    </BrowserRouter>
+  );
+}
+```
+
+### 3.6 Test Phase 3
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Browser:** http://localhost:5173 (Tracker ist jetzt Startseite)
+
+✅ **Test-Checklist:**
+1. Seite lädt → Timer + TodoSelector sichtbar
+2. TodoSelector öffnen → Projekte + Tasks gruppiert
+3. Task auswählen → Info-Text erscheint unten
+4. Timer starten → Countdown beginnt, Circle animiert
+5. Timer pausieren → Countdown stoppt
+6. Timer weiterlaufen lassen → Nach Ablauf: TimeEntry erstellt
+7. Timer stoppen → Bei laufendem Timer: TimeEntry für verstrichene Zeit erstellt
+8. Focus/Break Mode wechseln → Unterschiedliche Dauer (25/5 min)
+
+**DevTools Console prüfen:**
+- `✅ Time entry created: XXs for task #Y` nach Timer-Stop
+- Keine Errors
+
+**API-Requests in DevTools prüfen:**
+- `POST /api/time-entries` mit `{ todo_id, duration }`
+- Response enthält neue TimeEntry mit project_id
+
+**Code-Konsistenz Check:**
+- ✅ Nutzt bestehenden StoreContext (pomodoroSettings, todos, refreshTimeEntries)
+- ✅ Nutzt bestehende UI Components (Button, Select, Card)
+- ✅ Nutzt bestehenden API Service (api.timeEntries.create)
+- ✅ CSS Modules Pattern konsistent (`.module.css` für alle Components)
+- ✅ TypeScript Types aus `@/types` importiert
+- ✅ Farben-System aus `COLORS` Array (lib/utils.ts)
+
+---
+
+## Phase 4: TimeEntries List Feature (Frontend)
+
+**Ziel:** Liste der erfassten TimeEntries anzeigen mit Gruppierung nach Datum
+
+**Wichtig:** Phase 3 muss abgeschlossen sein (Timer funktioniert, TimeEntries werden erstellt)
+
+**Was wird gemacht:**
+
+1. **TimeEntryList Component** erstellen mit:
+   - Gruppierung nach Datum (heute, gestern, ältere Einträge)
+   - Anzeige pro Entry: Projekt-Farbe Badge, Task-Name, Dauer, Uhrzeit
+   - Datum-Header mit Summe der Dauer pro Tag
+   - Empty State wenn keine Einträge vorhanden
+   - Responsive Design (Card-Layout)
+   
+2. **formatDuration Helper** erweitern:
+   - Sekunden → Minuten/Stunden Formatierung (z.B. "25 min", "1h 30min")
+   - Summen-Berechnung für Tages-Totals
+   
+3. **TrackerPage Update:**
+   - TimeEntryList unterhalb des Timers integrieren
+   - Automatisches Refresh nach Timer-Stop
+   - "Recent Activity" Section Header
+
+**Flow:**
+1. User stoppt Timer → TimeEntry wird erstellt
+2. refreshTimeEntries() wird aufgerufen
+3. TimeEntryList zeigt neue Entry sofort an
+4. Entries gruppiert nach Datum mit Tages-Summe
+5. Projekt-Farbe als Badge links von Task-Name
+
+**Dependencies:**
+- Bestehendes: useStore (timeEntries, projects, todos), formatTime, formatDate aus lib/utils
+- Neu: formatDuration Funktion für bessere Dauer-Anzeige
+
+**Code-Struktur:**
+- `components/TimeEntryList.tsx` + `TimeEntryList.module.css` (Entry List Component)
+- `pages/TrackerPage.tsx` Update (Integration unterhalb Timer)
+- `lib/utils.ts` Update (formatDuration verbessern falls nötig)
+
+---
+
+### 4.1 TimeEntryList Component
+
+**components/TimeEntryList.tsx:**
+```typescript
+import { useMemo } from 'react';
+import { useStore } from '@/context/StoreContext';
+import { COLORS } from '@/lib/utils';
+import { formatDate, formatTime, formatDuration } from '@/lib/utils';
+import { Clock } from 'lucide-react';
+import styles from './TimeEntryList.module.css';
+
+export default function TimeEntryList() {
+  const { timeEntries, projects, todos } = useStore();
+
+  // Group entries by date
+  const groupedEntries = useMemo(() => {
+    const groups: Record<string, typeof timeEntries> = {};
+    
+    timeEntries
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .forEach(entry => {
+        const date = formatDate(entry.timestamp);
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(entry);
+      });
+    
+    return groups;
+  }, [timeEntries]);
+
+  // Calculate total duration per day
+  const getTotalDuration = (entries: typeof timeEntries) => {
+    return entries.reduce((sum, entry) => sum + entry.duration, 0);
+  };
+
+  if (timeEntries.length === 0) {
+    return (
+      <div className={styles.empty}>
+        <Clock size={48} />
+        <p>No time entries yet</p>
+        <span>Start the timer to track your first task!</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.list}>
+      <h2 className={styles.title}>Recent Activity</h2>
+      
+      {Object.entries(groupedEntries).map(([date, entries]) => (
+        <div key={date} className={styles.dateGroup}>
+          <div className={styles.dateHeader}>
+            <span className={styles.date}>{date}</span>
+            <span className={styles.total}>
+              {formatDuration(getTotalDuration(entries))}
+            </span>
+          </div>
+          
+          <div className={styles.entries}>
+            {entries.map(entry => {
+              const project = projects.find(p => p.id === entry.project_id);
+              const todo = todos.find(t => t.id === entry.todo_id);
+              const colorHex = COLORS.find(c => c.name === project?.color)?.hex || '#6366f1';
+              
+              return (
+                <div key={entry.id} className={styles.entry}>
+                  <div
+                    className={styles.colorBadge}
+                    style={{ backgroundColor: colorHex }}
+                  />
+                  <div className={styles.content}>
+                    <div className={styles.task}>
+                      <span className={styles.projectName}>{project?.name}</span>
+                      <span className={styles.separator}>•</span>
+                      <span className={styles.todoTitle}>{todo?.title}</span>
+                    </div>
+                    <div className={styles.meta}>
+                      <Clock size={14} />
+                      <span>{formatTime(entry.timestamp)}</span>
+                    </div>
+                  </div>
+                  <div className={styles.duration}>
+                    {formatDuration(entry.duration)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**components/TimeEntryList.module.css:**
+```css
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #94a3b8;
+  text-align: center;
+  gap: 1rem;
+}
+
+.empty p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.empty span {
+  font-size: 0.875rem;
+}
+
+.dateGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dateHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.date {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.total {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.entry:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e1;
+}
+
+.colorBadge {
+  width: 0.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.projectName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.separator {
+  color: #cbd5e1;
+}
+
+.todoTitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.duration {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .entry {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .colorBadge {
+    width: 100%;
+    height: 0.25rem;
+  }
+
+  .duration {
+    align-self: flex-end;
+  }
+}
+```
+
+### 4.2 lib/utils.ts Update (formatDuration verbessern)
+
+**lib/utils.ts Update:**
+
+Ersetze die bestehende `formatDuration` Funktion mit dieser verbesserten Version:
+
+```typescript
+export function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  
+  if (hours > 0) {
+    if (minutes > 0) {
+      return `${hours}h ${minutes}min`;
+    }
+    return `${hours}h`;
+  }
+  
+  if (minutes > 0) {
+    return `${minutes}min`;
+  }
+  
+  return `${seconds}s`;
+}
+```
+
+### 4.3 TrackerPage Update
+
+**pages/TrackerPage.tsx (VOLLSTÄNDIG - ersetzt Phase 3 Version):**
+```typescript
+import { useState } from 'react';
+import { useStore } from '@/context/StoreContext';
+import { api } from '@/lib/api';
+import Timer from '@/components/Timer';
+import TodoSelector from '@/components/TodoSelector';
+import TimeEntryList from '@/components/TimeEntryList';
+import Card from '@/components/ui/Card';
+import styles from './TrackerPage.module.css';
+
+export default function TrackerPage() {
+  const { pomodoroSettings, refreshTimeEntries, todos } = useStore();
+  const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+
+  const handleTimerComplete = async (elapsedSeconds: number) => {
+    if (!selectedTodoId) {
+      alert('Please select a task to track time for!');
+      return;
+    }
+
+    const selectedTodo = todos.find(t => t.id === selectedTodoId);
+    if (!selectedTodo) return;
+
+    try {
+      await api.timeEntries.create({
+        todo_id: selectedTodoId,
+        duration: elapsedSeconds,
+      });
+      await refreshTimeEntries();
+      console.log(`✅ Time entry created: ${elapsedSeconds}s for task #${selectedTodoId}`);
+    } catch (error) {
+      console.error('Failed to create time entry:', error);
+      alert('Failed to save time entry');
+    }
+  };
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Focus Timer</h1>
+        <p className={styles.subtitle}>Track your work with the Pomodoro Technique</p>
+      </div>
+
+      <Card className={styles.card}>
+        <div className={styles.content}>
+          <TodoSelector
+            selectedTodoId={selectedTodoId}
+            onChange={setSelectedTodoId}
+          />
+          
+          <Timer
+            focusDuration={pomodoroSettings.focus_duration}
+            breakDuration={pomodoroSettings.break_duration}
+            onComplete={handleTimerComplete}
+          />
+        </div>
+      </Card>
+
+      {selectedTodoId && (
+        <div className={styles.info}>
+          <p>Timer will track time for: <strong>{todos.find(t => t.id === selectedTodoId)?.title}</strong></p>
+        </div>
+      )}
+
+      {/* TimeEntries List */}
+      <div className={styles.entriesSection}>
+        <TimeEntryList />
+      </div>
+    </div>
+  );
+}
+```
+
+**pages/TrackerPage.module.css Update:**
+
+Ergänze am Ende der Datei:
+
+```css
+.entriesSection {
+  margin-top: 3rem;
+}
+```
+
+### 4.4 Test Phase 4
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Browser:** http://localhost:5173
+
+✅ **Test-Checklist:**
+1. Seite lädt → Timer oben, darunter "No time entries yet" Message
+2. Task auswählen + Timer starten
+3. Timer für ein paar Sekunden laufen lassen
+4. Timer stoppen → TimeEntry erscheint sofort in Liste
+5. Entry zeigt: Projekt-Farbe Badge (links), Projekt-Name • Task-Name, Uhrzeit, Dauer (rechts)
+6. Datum-Header zeigt aktuelles Datum + Tages-Summe
+7. Mehrere Entries erstellen → Gruppierung nach Datum funktioniert
+8. Verschiedene Projekte tracken → Farben unterschiedlich
+9. Mobile (DevTools Responsive) → Entries stapeln sich vertikal, Farb-Badge oben horizontal
+
+**DevTools Console prüfen:**
+- `✅ Time entry created: XXs for task #Y` nach jedem Stop
+- Keine Errors
+
+**API-Requests in DevTools prüfen:**
+- `POST /api/timeentries` nach Timer-Stop
+- `GET /api/timeentries` beim Laden der Seite
+- Response enthält alle Entries mit project_id, todo_id, duration, timestamp
+
+**Code-Konsistenz Check:**
+- ✅ Nutzt useStore (timeEntries, projects, todos)
+- ✅ Nutzt formatDate, formatTime, formatDuration aus lib/utils
+- ✅ Nutzt COLORS Array für Projekt-Farben
+- ✅ CSS Modules Pattern (.module.css)
+- ✅ Responsive Design mit @media queries
+- ✅ Empty State mit Icon (lucide-react Clock)
+- ✅ useMemo für Performance (groupedEntries Berechnung)
+
+**Visuelle Validierung:**
+- Entries haben Hover-Effekt (Shadow + Border-Color)
+- Farb-Badges zeigen korrekte Projekt-Farbe
+- Datum-Header mit grauer Trennlinie
+- Tages-Summe in Indigo-Farbe (#6366f1)
+- Responsive: Mobile Stack-Layout funktioniert
+
+---
+
+## Phase 5: Statistics Page (Frontend)
+
+**Nächster Schritt:** Stats-Seite mit Charts und Auswertungen
+- Gesamtzeit pro Projekt (Pie Chart)
+- Zeitverlauf pro Tag (Bar Chart)
+- Top Tasks nach Dauer
+- Streak-Anzeige (Tage in Folge getrackt)
+
+---
