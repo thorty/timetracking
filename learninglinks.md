@@ -29,3 +29,10 @@ https://code.visualstudio.com/docs/copilot/copilot-tips-and-tricks#_choose-the-r
  
 
 
+## Phase 6: Settings & Polish (Optional)
+
+**Nächster Schritt:** Pomodoro-Einstellungen editierbar machen + UI Polish
+- Settings Page für Focus/Break Duration
+- Dark Mode Toggle (optional)
+- Export TimeEntries als CSV
+- Projekt-Archivierung

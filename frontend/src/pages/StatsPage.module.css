@@ -1,0 +1,316 @@
+.page {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #64748b;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #94a3b8;
+  text-align: center;
+  gap: 1rem;
+}
+
+.empty p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.empty span {
+  font-size: 0.875rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.todayCard {
+  grid-column: span 2;
+}
+
+.streakCard {
+  grid-column: span 2;
+}
+
+.chartCard {
+  grid-column: span 2;
+}
+
+.topTasksCard {
+  grid-column: span 2;
+}
+
+.totalCard {
+  grid-column: span 4;
+}
+
+/* Today Stats */
+.todayStats {
+  display: flex;
+  gap: 2rem;
+}
+
+.statBox {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.icon {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.statValue {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Streak */
+.streak {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.flameIcon {
+  color: #f97316;
+}
+
+.streakValue {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.streakLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+/* Charts */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.legendColor {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 0.125rem;
+  flex-shrink: 0;
+}
+
+.legendName {
+  flex: 1;
+  color: #334155;
+}
+
+.legendValue {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.noData {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+/* Top Tasks */
+.topTasks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.taskRank {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.taskInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.taskTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskProject {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.taskColor {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.taskDuration {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.taskBar {
+  grid-column: 2 / -1;
+  height: 0.25rem;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.taskBarFill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Total Stats */
+.totalStats {
+  display: flex;
+  gap: 3rem;
+  justify-content: center;
+}
+
+.totalItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.totalIcon {
+  color: #6366f1;
+}
+
+.totalValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.totalLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .todayCard,
+  .streakCard,
+  .chartCard,
+  .topTasksCard,
+  .totalCard {
+    grid-column: span 2;
+  }
+
+  .totalStats {
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .todayCard,
+  .streakCard,
+  .chartCard,
+  .topTasksCard,
+  .totalCard {
+    grid-column: span 1;
+  }
+
+  .todayStats {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .totalStats {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}

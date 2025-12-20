@@ -3,7 +3,7 @@ import { StoreProvider } from './context/StoreContext';
 import Layout from './components/Layout';
 import TrackerPage from './pages/TrackerPage';
 import TodosPage from './pages/TodosPage';
-import styles from './App.module.css';
+import StatsPage from './pages/StatsPage';
 
 export default function App() {
   return (
@@ -13,7 +13,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<TrackerPage />} />
             <Route path="/todos" element={<TodosPage />} />
-            <Route path="/stats" element={<div className={styles.placeholder}>Stats Page</div>} />
+            <Route path="/stats" element={<StatsPage />} />
           </Routes>
         </Layout>
       </StoreProvider>

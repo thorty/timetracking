@@ -55,3 +55,33 @@ export function formatTime(date: string | Date): string {
     minute: '2-digit'
   });
 }
+
+export function getStartOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function getDaysArray(days: number): Date[] {
+  const result: Date[] = [];
+  const today = getStartOfDay(new Date());
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    result.push(date);
+  }
+  
+  return result;
+}
+
+export function getDateString(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+export function getShortDate(date: Date): string {
+  return new Date(date).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit'
+  });
+}

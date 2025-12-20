@@ -2744,10 +2744,885 @@ Ergänze am Ende der Datei:
 
 ## Phase 5: Statistics Page (Frontend)
 
-**Nächster Schritt:** Stats-Seite mit Charts und Auswertungen
-- Gesamtzeit pro Projekt (Pie Chart)
-- Zeitverlauf pro Tag (Bar Chart)
-- Top Tasks nach Dauer
-- Streak-Anzeige (Tage in Folge getrackt)
+**Ziel:** Statistiken und Auswertungen visualisieren mit Charts und Metriken
+
+**Wichtig:** Phase 4 muss abgeschlossen sein (TimeEntries werden angezeigt)
+
+**Was wird gemacht:**
+
+1. **recharts Library installieren** (React Charts Library mit TypeScript Support)
+   - Pie Charts für Projekt-Verteilung
+   - Bar Charts für Zeitverlauf
+   
+2. **StatsPage Component** erstellen mit:
+   - Grid-Layout mit mehreren Statistik-Karten
+   - Heute-Statistik: Total Zeit heute + Anzahl Sessions
+   - Gesamtzeit pro Projekt: Pie Chart mit Farben
+   - Zeitverlauf letzte 7 Tage: Bar Chart
+   - Top 5 Tasks nach Gesamtdauer: Liste mit Balken
+   - Streak Counter: Tage in Folge getrackt
+   
+3. **Daten-Processing Funktionen**:
+   - Gruppierung von TimeEntries nach Projekt
+   - Gruppierung nach Tag für Chart
+   - Berechnung von Streaks
+   - Top Tasks Ranking
+
+4. **StatCard Component** für konsistentes Layout:
+   - Wiederverwendbare Card mit Titel + Content
+   - Verschiedene Größen (1x1, 2x1 Grid)
+
+**Flow:**
+1. User navigiert zu `/stats`
+2. StatsPage lädt timeEntries, projects, todos aus Store
+3. useMemo berechnet Statistiken (Performance)
+4. Charts rendern mit recharts
+5. Automatisches Update wenn neue TimeEntries erstellt werden
+
+**Dependencies:**
+- recharts: ^2.10.0 (Charts Library)
+- Bestehendes: useStore (timeEntries, projects, todos), formatDuration, COLORS
+
+**Code-Struktur:**
+- `pages/StatsPage.tsx` + `StatsPage.module.css` (Main Stats Page)
+- `components/StatCard.tsx` + `StatCard.module.css` (Reusable Card)
+- `lib/utils.ts` Update (Helper: getStartOfDay, getDaysArray für Charts)
+- `App.tsx` Update (Route `/stats` → StatsPage statt Placeholder)
+
+---
+
+### 5.1 Dependencies Installation
+
+```bash
+cd frontend
+npm install recharts
+```
+
+### 5.2 Utils Update (Date Helpers)
+
+**lib/utils.ts - Ergänzen am Ende:**
+
+```typescript
+export function getStartOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function getDaysArray(days: number): Date[] {
+  const result: Date[] = [];
+  const today = getStartOfDay(new Date());
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    result.push(date);
+  }
+  
+  return result;
+}
+
+export function getDateString(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+export function getShortDate(date: Date): string {
+  return new Date(date).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit'
+  });
+}
+```
+
+### 5.3 StatCard Component
+
+**components/StatCard.tsx:**
+```typescript
+import { ReactNode } from 'react';
+import styles from './StatCard.module.css';
+
+interface StatCardProps {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}
+
+export default function StatCard({ title, children, className }: StatCardProps) {
+  return (
+    <div className={`${styles.card} ${className || ''}`}>
+      <h3 className={styles.title}>{title}</h3>
+      <div className={styles.content}>{children}</div>
+    </div>
+  );
+}
+```
+
+**components/StatCard.module.css:**
+```css
+.card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+```
+
+### 5.4 StatsPage Component
+
+**pages/StatsPage.tsx:**
+```typescript
+import { useMemo } from 'react';
+import { useStore } from '@/context/StoreContext';
+import { COLORS } from '@/lib/utils';
+import { formatDuration, getDaysArray, getDateString, getShortDate, getStartOfDay } from '@/lib/utils';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, Target, Flame, Clock } from 'lucide-react';
+import StatCard from '@/components/StatCard';
+import styles from './StatsPage.module.css';
+
+export default function StatsPage() {
+  const { timeEntries, projects, todos } = useStore();
+
+  // Heute Statistik
+  const todayStats = useMemo(() => {
+    const today = getStartOfDay(new Date());
+    const todayEntries = timeEntries.filter(entry => {
+      const entryDate = getStartOfDay(new Date(entry.timestamp));
+      return entryDate.getTime() === today.getTime();
+    });
+
+    return {
+      totalDuration: todayEntries.reduce((sum, entry) => sum + entry.duration, 0),
+      sessionCount: todayEntries.length,
+    };
+  }, [timeEntries]);
+
+  // Gesamtzeit pro Projekt (Pie Chart Data)
+  const projectData = useMemo(() => {
+    const projectMap: Record<number, number> = {};
+
+    timeEntries.forEach(entry => {
+      projectMap[entry.project_id] = (projectMap[entry.project_id] || 0) + entry.duration;
+    });
+
+    return Object.entries(projectMap).map(([projectId, duration]) => {
+      const project = projects.find(p => p.id === Number(projectId));
+      const colorHex = COLORS.find(c => c.name === project?.color)?.hex || '#6366f1';
+      
+      return {
+        name: project?.name || 'Unknown',
+        value: duration,
+        color: colorHex,
+      };
+    }).sort((a, b) => b.value - a.value);
+  }, [timeEntries, projects]);
+
+  // Zeitverlauf letzte 7 Tage (Bar Chart Data)
+  const weekData = useMemo(() => {
+    const days = getDaysArray(7);
+    const dayMap: Record<string, number> = {};
+
+    timeEntries.forEach(entry => {
+      const entryDate = getDateString(new Date(entry.timestamp));
+      dayMap[entryDate] = (dayMap[entryDate] || 0) + entry.duration;
+    });
+
+    return days.map(date => ({
+      date: getShortDate(date),
+      duration: dayMap[getDateString(date)] || 0,
+    }));
+  }, [timeEntries]);
+
+  // Top 5 Tasks nach Dauer
+  const topTasks = useMemo(() => {
+    const taskMap: Record<number, number> = {};
+
+    timeEntries.forEach(entry => {
+      taskMap[entry.todo_id] = (taskMap[entry.todo_id] || 0) + entry.duration;
+    });
+
+    return Object.entries(taskMap)
+      .map(([todoId, duration]) => {
+        const todo = todos.find(t => t.id === Number(todoId));
+        const project = projects.find(p => p.id === todo?.project_id);
+        const colorHex = COLORS.find(c => c.name === project?.color)?.hex || '#6366f1';
+
+        return {
+          id: Number(todoId),
+          title: todo?.title || 'Unknown',
+          projectName: project?.name || '',
+          duration,
+          color: colorHex,
+        };
+      })
+      .sort((a, b) => b.duration - a.duration)
+      .slice(0, 5);
+  }, [timeEntries, todos, projects]);
+
+  // Streak Berechnung (Tage in Folge getrackt)
+  const streak = useMemo(() => {
+    if (timeEntries.length === 0) return 0;
+
+    const uniqueDates = Array.from(
+      new Set(
+        timeEntries.map(entry => getDateString(new Date(entry.timestamp)))
+      )
+    ).sort().reverse();
+
+    let currentStreak = 0;
+    const today = getDateString(new Date());
+    const yesterday = getDateString(new Date(Date.now() - 86400000));
+
+    // Check if today or yesterday has entries
+    if (uniqueDates[0] !== today && uniqueDates[0] !== yesterday) {
+      return 0;
+    }
+
+    let expectedDate = new Date();
+    if (uniqueDates[0] === yesterday) {
+      expectedDate = new Date(Date.now() - 86400000);
+    }
+
+    for (const dateStr of uniqueDates) {
+      if (dateStr === getDateString(expectedDate)) {
+        currentStreak++;
+        expectedDate.setDate(expectedDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return currentStreak;
+  }, [timeEntries]);
+
+  const maxTaskDuration = topTasks.length > 0 ? topTasks[0].duration : 1;
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Statistics</h1>
+        <p className={styles.subtitle}>Your productivity insights</p>
+      </div>
+
+      {timeEntries.length === 0 ? (
+        <div className={styles.empty}>
+          <Clock size={48} />
+          <p>No data yet</p>
+          <span>Start tracking time to see your statistics!</span>
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {/* Heute Stats */}
+          <StatCard title="Today" className={styles.todayCard}>
+            <div className={styles.todayStats}>
+              <div className={styles.statBox}>
+                <Clock size={24} className={styles.icon} />
+                <div>
+                  <div className={styles.statValue}>{formatDuration(todayStats.totalDuration)}</div>
+                  <div className={styles.statLabel}>Total Time</div>
+                </div>
+              </div>
+              <div className={styles.statBox}>
+                <Target size={24} className={styles.icon} />
+                <div>
+                  <div className={styles.statValue}>{todayStats.sessionCount}</div>
+                  <div className={styles.statLabel}>Sessions</div>
+                </div>
+              </div>
+            </div>
+          </StatCard>
+
+          {/* Streak */}
+          <StatCard title="Streak" className={styles.streakCard}>
+            <div className={styles.streak}>
+              <Flame size={48} className={styles.flameIcon} />
+              <div className={styles.streakValue}>{streak}</div>
+              <div className={styles.streakLabel}>Day{streak !== 1 ? 's' : ''} in a row</div>
+            </div>
+          </StatCard>
+
+          {/* Projekt-Verteilung (Pie Chart) */}
+          <StatCard title="Time by Project" className={styles.chartCard}>
+            {projectData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={projectData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {projectData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => formatDuration(value)}
+                    contentStyle={{
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '0.5rem',
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className={styles.noData}>No project data</div>
+            )}
+            <div className={styles.legend}>
+              {projectData.map((item, index) => (
+                <div key={index} className={styles.legendItem}>
+                  <div className={styles.legendColor} style={{ backgroundColor: item.color }} />
+                  <span className={styles.legendName}>{item.name}</span>
+                  <span className={styles.legendValue}>{formatDuration(item.value)}</span>
+                </div>
+              ))}
+            </div>
+          </StatCard>
+
+          {/* Zeitverlauf 7 Tage (Bar Chart) */}
+          <StatCard title="Last 7 Days" className={styles.chartCard}>
+            {weekData.some(d => d.duration > 0) ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={weekData}>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickFormatter={(value) => `${Math.floor(value / 60)}m`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => formatDuration(value)}
+                    contentStyle={{
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '0.5rem',
+                    }}
+                  />
+                  <Bar dataKey="duration" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className={styles.noData}>No activity in the last 7 days</div>
+            )}
+          </StatCard>
+
+          {/* Top Tasks */}
+          <StatCard title="Top Tasks" className={styles.topTasksCard}>
+            {topTasks.length > 0 ? (
+              <div className={styles.topTasks}>
+                {topTasks.map((task, index) => (
+                  <div key={task.id} className={styles.taskRow}>
+                    <div className={styles.taskRank}>{index + 1}</div>
+                    <div className={styles.taskInfo}>
+                      <div className={styles.taskTitle}>{task.title}</div>
+                      <div className={styles.taskProject}>
+                        <div
+                          className={styles.taskColor}
+                          style={{ backgroundColor: task.color }}
+                        />
+                        {task.projectName}
+                      </div>
+                    </div>
+                    <div className={styles.taskDuration}>
+                      {formatDuration(task.duration)}
+                    </div>
+                    <div className={styles.taskBar}>
+                      <div
+                        className={styles.taskBarFill}
+                        style={{
+                          width: `${(task.duration / maxTaskDuration) * 100}%`,
+                          backgroundColor: task.color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.noData}>No tasks tracked yet</div>
+            )}
+          </StatCard>
+
+          {/* Gesamtstatistik */}
+          <StatCard title="All Time" className={styles.totalCard}>
+            <div className={styles.totalStats}>
+              <div className={styles.totalItem}>
+                <TrendingUp size={20} className={styles.totalIcon} />
+                <div>
+                  <div className={styles.totalValue}>
+                    {formatDuration(timeEntries.reduce((sum, e) => sum + e.duration, 0))}
+                  </div>
+                  <div className={styles.totalLabel}>Total Tracked</div>
+                </div>
+              </div>
+              <div className={styles.totalItem}>
+                <Target size={20} className={styles.totalIcon} />
+                <div>
+                  <div className={styles.totalValue}>{timeEntries.length}</div>
+                  <div className={styles.totalLabel}>Total Sessions</div>
+                </div>
+              </div>
+            </div>
+          </StatCard>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**pages/StatsPage.module.css:**
+```css
+.page {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #64748b;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #94a3b8;
+  text-align: center;
+  gap: 1rem;
+}
+
+.empty p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.empty span {
+  font-size: 0.875rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.todayCard {
+  grid-column: span 2;
+}
+
+.streakCard {
+  grid-column: span 2;
+}
+
+.chartCard {
+  grid-column: span 2;
+}
+
+.topTasksCard {
+  grid-column: span 2;
+}
+
+.totalCard {
+  grid-column: span 4;
+}
+
+/* Today Stats */
+.todayStats {
+  display: flex;
+  gap: 2rem;
+}
+
+.statBox {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.icon {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.statValue {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Streak */
+.streak {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.flameIcon {
+  color: #f97316;
+}
+
+.streakValue {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.streakLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+/* Charts */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.legendColor {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 0.125rem;
+  flex-shrink: 0;
+}
+
+.legendName {
+  flex: 1;
+  color: #334155;
+}
+
+.legendValue {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.noData {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+/* Top Tasks */
+.topTasks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.taskRank {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.taskInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.taskTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskProject {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.taskColor {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.taskDuration {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.taskBar {
+  grid-column: 2 / -1;
+  height: 0.25rem;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.taskBarFill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Total Stats */
+.totalStats {
+  display: flex;
+  gap: 3rem;
+  justify-content: center;
+}
+
+.totalItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.totalIcon {
+  color: #6366f1;
+}
+
+.totalValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.totalLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .todayCard,
+  .streakCard,
+  .chartCard,
+  .topTasksCard,
+  .totalCard {
+    grid-column: span 2;
+  }
+
+  .totalStats {
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .todayCard,
+  .streakCard,
+  .chartCard,
+  .topTasksCard,
+  .totalCard {
+    grid-column: span 1;
+  }
+
+  .todayStats {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .totalStats {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
+```
+
+### 5.5 App.tsx Update
+
+**App.tsx (VOLLSTÄNDIG - ersetzt Phase 4 Version):**
+```typescript
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { StoreProvider } from './context/StoreContext';
+import Layout from './components/Layout';
+import TrackerPage from './pages/TrackerPage';
+import TodosPage from './pages/TodosPage';
+import StatsPage from './pages/StatsPage';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <StoreProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<TrackerPage />} />
+            <Route path="/todos" element={<TodosPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+          </Routes>
+        </Layout>
+      </StoreProvider>
+    </BrowserRouter>
+  );
+}
+```
+
+### 5.6 Test Phase 5
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Browser:** http://localhost:5173/stats
+
+✅ **Test-Checklist:**
+
+**Initial State (keine Daten):**
+1. Navigate zu `/stats` → "No data yet" Message erscheint
+2. Tracke ein paar Tasks → Gehe zurück zu `/stats`
+
+**Mit Daten:**
+3. **Today Card:** Zeigt heutige Gesamtzeit + Anzahl Sessions
+4. **Streak Card:** Zeigt Flame-Icon + Anzahl Tage in Folge
+5. **Time by Project (Pie Chart):**
+   - Donut Chart mit Projekt-Farben
+   - Hover zeigt Projekt-Name + Dauer
+   - Legend unterhalb mit allen Projekten
+6. **Last 7 Days (Bar Chart):**
+   - Balken für jeden Tag (letzten 7 Tage)
+   - Y-Achse zeigt Minuten
+   - Hover zeigt exakte Dauer
+7. **Top Tasks:**
+   - Liste mit Rank (#1-5)
+   - Task-Name + Projekt mit Farb-Dot
+   - Dauer rechts
+   - Progress-Balken in Projekt-Farbe
+8. **All Time Card:** Gesamtzeit + Total Sessions über alle Daten
+
+**Interaktivität:**
+9. Hover über Charts → Tooltips erscheinen
+10. Responsive (DevTools): Grid stapelt sich auf Mobile (1 Spalte)
+11. Mehrere Projekte tracken → Pie Chart zeigt verschiedene Farben
+12. Über mehrere Tage tracken → Bar Chart zeigt Verlauf
+13. Einen Tag Pause → Streak resettet auf 0
+
+**DevTools Console prüfen:**
+- Keine Errors
+- Keine Warnings von recharts
+
+**Code-Konsistenz Check:**
+- ✅ Nutzt useStore (timeEntries, projects, todos)
+- ✅ Nutzt formatDuration, COLORS, neue Date-Helpers
+- ✅ CSS Modules Pattern
+- ✅ useMemo für Performance (alle Berechnungen optimiert)
+- ✅ Responsive Design (@media queries)
+- ✅ Empty State mit Icon
+- ✅ recharts mit Tooltip + Custom Styles
+- ✅ lucide-react Icons (TrendingUp, Target, Flame, Clock)
+
+**Visuelle Validierung:**
+- Cards haben Shadow + Border
+- Icons in Indigo-Farbe (#6366f1)
+- Flame-Icon in Orange (#f97316)
+- Charts verwenden Projekt-Farben
+- Top Tasks haben nummerierten Rank
+- Progress Bars animieren smooth
+- Grid Layout responsive (4 → 2 → 1 Spalten)
+
+**Performance Check:**
+- Große TimeEntry-Mengen (100+) → Page lädt smooth (useMemo!)
+- Charts rendern ohne Lag
+- Hover auf Charts responsive
+
+---
+
+## Phase 6: Settings & Polish (Optional)
+
+**Nächster Schritt:** Pomodoro-Einstellungen editierbar machen + UI Polish
+- Settings Page für Focus/Break Duration
+- Dark Mode Toggle (optional)
+- Export TimeEntries als CSV
+- Projekt-Archivierung
 
 ---
