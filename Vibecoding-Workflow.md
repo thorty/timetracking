@@ -5,16 +5,19 @@
     - design
     - techstack (ask copilot what is the best for your app, discuss, descide ) -> modify description
 
-2. let llm write implementation plan:
-    - store in markdown
-    - iterative
-    - let the llm check the plan
-    - every feature one step!
+2. let llm write implementation plan: 
+- store in markdown
+- iterative
+- let the llm check the plan
+- every feature one step!
+
+! use one of the biggest models for that task (eg claude 4.5)
 
 
-3. start building every step. 
+3. Building workflow: 
 
-    WorkFlow: 
+! use a smaller model for implementation, faster and mor streight forward then others.
+
     1. Create feature branch or commit last changes
     2. Check description / Plan 
     3. Write or Rewrite Implementation plan

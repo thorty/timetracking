@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Clock, CheckSquare, BarChart3, Settings } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Clock, CheckSquare, BarChart3, Settings, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import styles from './Layout.module.css';
 
@@ -9,6 +10,14 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className={styles.layout}>
       {/* Desktop Sidebar */}
@@ -57,6 +66,18 @@ export default function Layout({ children }: LayoutProps) {
             <span>Settings</span>
           </NavLink>
         </nav>
+
+        {/* User Section */}
+        <div className={styles.userSection}>
+          <div className={styles.userInfo}>
+            <User size={18} />
+            <span>{user?.username}</span>
+          </div>
+          <button onClick={handleLogout} className={styles.logoutButton}>
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}

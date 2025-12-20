@@ -2,13 +2,26 @@ import type { Project, Todo, TimeEntry, PomodoroSettings } from '@/types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+  };
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     ...options
   });
   
   if (!response.ok) {
+    // 401 = Nicht authentifiziert → zum Login
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
     throw new Error(`API Error: ${response.statusText}`);
   }
   

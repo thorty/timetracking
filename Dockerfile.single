@@ -27,9 +27,12 @@ COPY frontend/package*.json /app/frontend/
 WORKDIR /app/frontend
 RUN npm ci
 
-COPY frontend/ /app/frontend/
 # Frontend verwendet relativen Pfad /api für nginx reverse proxy
+# ENV muss VOR dem COPY gesetzt werden, damit .env überschrieben wird
 ENV VITE_API_URL=/api
+COPY frontend/ /app/frontend/
+# Lösche .env Datei, falls sie trotz .dockerignore kopiert wurde
+RUN rm -f .env .env.local .env.*.local
 RUN npm run build
 
 # Frontend Build nach nginx html verschieben
