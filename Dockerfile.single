@@ -1,0 +1,56 @@
+# Single-Container Setup für Frontend + Backend
+FROM python:3.11-slim
+
+# System-Dependencies installieren
+RUN apt-get update && apt-get install -y \
+    nginx \
+    curl \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js installieren (für Frontend Build)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Backend Setup
+COPY backend/requirements.txt /app/backend/
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+COPY backend/ /app/backend/
+RUN mkdir -p /app/backend/data
+
+# Frontend Build
+COPY frontend/package*.json /app/frontend/
+WORKDIR /app/frontend
+RUN npm ci
+
+COPY frontend/ /app/frontend/
+# Frontend verwendet relativen Pfad /api für nginx reverse proxy
+ENV VITE_API_URL=/api
+RUN npm run build
+
+# Frontend Build nach nginx html verschieben
+RUN rm -rf /usr/share/nginx/html/* \
+    && cp -r /app/frontend/dist/* /usr/share/nginx/html/
+
+# nginx Konfiguration
+COPY nginx.single.conf /etc/nginx/sites-available/default
+
+# Supervisor Konfiguration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Cleanup: Node.js nach Build entfernen (spart ~200MB)
+RUN apt-get remove -y nodejs \
+    && apt-get autoremove -y \
+    && rm -rf /app/frontend/node_modules
+
+WORKDIR /app
+
+# Ports
+EXPOSE 80
+
+# Start mit Supervisor (startet nginx + uvicorn)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
