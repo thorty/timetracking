@@ -6254,3 +6254,951 @@ Prüfe jede Page/Component:
 - ✅ Focus States sichtbar in beiden Themes
 
 ---
+
+## Phase 10: Multi-User Support mit Authentication
+
+**Ziel:** Mehrere Benutzer können sich mit Username/Passwort einloggen. Jeder User hat eigene Projekte, Todos, Time Entries und Settings. Keine Zusammenarbeit zwischen Usern.
+
+**Scope:**
+- User Registration & Login
+- Session Management (JWT Tokens)
+- User-spezifische Daten (isolation)
+- Login Screen vor App-Zugriff
+- Protected Routes
+- Logout Funktionalität
+
+---
+
+### 10.1 Backend: User Model & Authentication
+
+**Backend Models erweitern:**
+
+**backend/models.py - User Model hinzufügen:**
+```python
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
+from database import Base
+import bcrypt
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    
+    # Relationships
+    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+    time_entries = relationship("TimeEntry", back_populates="user", cascade="all, delete-orphan")
+    settings = relationship("PomodoroSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    
+    def verify_password(self, password: str) -> bool:
+        return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+```
+
+**Bestehende Models erweitern (user_id Foreign Key):**
+
+```python
+class Project(Base):
+    __tablename__ = "projects"
+    # ... existing fields ...
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user = relationship("User", back_populates="projects")
+
+class TimeEntry(Base):
+    __tablename__ = "time_entries"
+    # ... existing fields ...
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user = relationship("User", back_populates="time_entries")
+
+class PomodoroSettings(Base):
+    __tablename__ = "pomodoro_settings"
+    # ... existing fields ...
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    user = relationship("User", back_populates="settings")
+```
+
+**backend/schemas.py - User Schemas:**
+```python
+from pydantic import BaseModel, validator
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    
+    @validator('username')
+    def username_min_length(cls, v):
+        if len(v) < 3:
+            raise ValueError('Username must be at least 3 characters')
+        return v
+    
+    @validator('password')
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    
+    class Config:
+        from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: str | None = None
+```
+
+**backend/auth.py - JWT Authentication:**
+```python
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from database import get_db
+from models import User
+import os
+
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+
+security = HTTPBearer()
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+```
+
+**Dependencies installieren:**
+```bash
+cd backend
+pip install python-jose[cryptography] bcrypt python-multipart
+pip freeze > requirements.txt
+```
+
+---
+
+### 10.2 Backend: Auth Endpoints
+
+**backend/main.py - Auth Routes hinzufügen:**
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from auth import create_access_token, get_current_user
+from models import User
+from schemas import UserCreate, UserLogin, UserResponse, Token
+from datetime import timedelta
+
+app = FastAPI()
+
+# ... existing imports and setup ...
+
+@app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    # Check if username exists
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
+        )
+    
+    # Create new user
+    hashed_password = User.hash_password(user_data.password)
+    new_user = User(
+        username=user_data.username,
+        hashed_password=hashed_password
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
+
+@app.post("/api/auth/login", response_model=Token)
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == user_data.username).first()
+    if not user or not user.verify_password(user_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+```
+
+---
+
+### 10.3 Backend: Protected Routes mit User Isolation
+
+**Alle bestehenden Endpoints anpassen:**
+
+**Beispiel - Projects Endpoints:**
+```python
+@app.get("/api/projects", response_model=List[ProjectResponse])
+def get_projects(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    projects = db.query(Project).filter(Project.user_id == current_user.id).all()
+    return projects
+
+@app.post("/api/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+def create_project(
+    project: ProjectCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    new_project = Project(
+        **project.dict(),
+        user_id=current_user.id
+    )
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+    return new_project
+
+# Repeat for: PUT, DELETE - always filter by current_user.id
+```
+
+**Repeat für alle Endpoints:**
+- `/api/projects/*` - Filter nach user_id
+- `/api/todos/*` - Filter nach project.user_id
+- `/api/time-entries/*` - Filter nach user_id
+- `/api/settings/*` - Filter nach user_id
+
+**WICHTIG: Ownership Validation:**
+```python
+def get_project_or_404(project_id: int, user_id: int, db: Session) -> Project:
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == user_id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+```
+
+---
+
+### 10.4 Database Migration
+
+**Datenbank neu initialisieren (ACHTUNG: Löscht alle Daten!):**
+
+```bash
+cd backend
+rm timetracker.db
+# main.py: Base.metadata.create_all(bind=engine) läuft beim Start
+python -m uvicorn main:app --reload
+```
+
+**Alternative: Alembic Migrations (optional für Production):**
+```bash
+pip install alembic
+alembic init alembic
+# Alembic Config + Migrations erstellen
+```
+
+---
+
+### 10.5 Frontend: Auth Context & Token Management
+
+**frontend/src/context/AuthContext.tsx:**
+```typescript
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+interface User {
+  id: number;
+  username: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  token: string | null;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
+  logout: () => void;
+  isLoading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+  // Load token from localStorage on mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+      fetchUser(storedToken);
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchUser = async (authToken: string) => {
+    try {
+      const response = await fetch(`${API_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        // Invalid token
+        localStorage.removeItem('token');
+        setToken(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (username: string, password: string) => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Login failed');
+    }
+
+    const data = await response.json();
+    const newToken = data.access_token;
+    
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    await fetchUser(newToken);
+    navigate('/');
+  };
+
+  const register = async (username: string, password: string) => {
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Registration failed');
+    }
+
+    // Auto-login after registration
+    await login(username, password);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+    navigate('/login');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, login, register, logout, isLoading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+}
+```
+
+---
+
+### 10.6 Frontend: API Client mit Token
+
+**frontend/src/lib/api.ts - Token in alle Requests einfügen:**
+```typescript
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+  };
+}
+
+export async function fetchProjects() {
+  const response = await fetch(`${API_URL}/projects`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch projects');
+  return response.json();
+}
+
+export async function createProject(data: ProjectCreate) {
+  const response = await fetch(`${API_URL}/projects`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to create project');
+  return response.json();
+}
+
+// Repeat for all API functions: todos, time-entries, settings
+```
+
+---
+
+### 10.7 Frontend: Login & Register Pages
+
+**frontend/src/pages/LoginPage.tsx:**
+```typescript
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Card from '../components/ui/Card';
+import styles from './LoginPage.module.css';
+
+export default function LoginPage() {
+  const [isRegister, setIsRegister] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login, register } = useAuth();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isRegister) {
+        await register(username, password);
+      } else {
+        await login(username, password);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.container}>
+      <Card className={styles.card}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>
+            {isRegister ? 'Create Account' : 'Welcome Back'}
+          </h1>
+          <p className={styles.subtitle}>
+            {isRegister 
+              ? 'Sign up to start tracking your time' 
+              : 'Sign in to continue to your workspace'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <Input
+            label="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter your username"
+            required
+            minLength={3}
+          />
+          
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            required
+            minLength={6}
+          />
+
+          {error && (
+            <div className={styles.error}>
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : (isRegister ? 'Sign Up' : 'Sign In')}
+          </Button>
+        </form>
+
+        <div className={styles.footer}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsRegister(!isRegister);
+              setError('');
+            }}
+            className={styles.toggleButton}
+          >
+            {isRegister 
+              ? 'Already have an account? Sign in' 
+              : "Don't have an account? Sign up"}
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+```
+
+**frontend/src/pages/LoginPage.module.css:**
+```css
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  padding: 1rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 28rem;
+  padding: 2.5rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.error {
+  padding: 0.75rem;
+  background: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: 0.5rem;
+  color: var(--color-error);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.footer {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.toggleButton {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: opacity var(--transition-fast);
+}
+
+.toggleButton:hover {
+  opacity: 0.8;
+}
+```
+
+---
+
+### 10.8 Frontend: Protected Routes
+
+**frontend/src/components/ProtectedRoute.tsx:**
+```typescript
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import Loading from './Loading';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loading />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+```
+
+**frontend/src/App.tsx - Routes mit Protection:**
+```typescript
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthProvider';
+import ProtectedRoute from './components/ProtectedRoute';
+import LoginPage from './pages/LoginPage';
+import Layout from './components/Layout';
+// ... other imports
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <Routes>
+                {/* Public Route */}
+                <Route path="/login" element={<LoginPage />} />
+                
+                {/* Protected Routes */}
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <StoreProvider>
+                      <Layout>
+                        <Routes>
+                          <Route index element={<Navigate to="/tracker" replace />} />
+                          <Route path="/tracker" element={<TrackerPage />} />
+                          <Route path="/stats" element={<StatsPage />} />
+                          <Route path="/todos" element={<TodosPage />} />
+                          <Route path="/settings" element={<SettingsPage />} />
+                        </Routes>
+                      </Layout>
+                    </StoreProvider>
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+---
+
+### 10.9 Frontend: Logout Button in Sidebar
+
+**frontend/src/components/Layout.tsx - User Info + Logout:**
+```typescript
+import { LogOut, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import styles from './Layout.module.css';
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+
+  return (
+    <div className={styles.layout}>
+      <aside className={styles.sidebar}>
+        {/* Logo + Theme Toggle */}
+        <div className={styles.logo}>
+          <Clock size={28} />
+          <span>Timetracker</span>
+          <ThemeToggle />
+        </div>
+
+        {/* Navigation */}
+        <nav className={styles.nav}>
+          {/* ... existing nav items ... */}
+        </nav>
+
+        {/* User Info + Logout at Bottom */}
+        <div className={styles.userSection}>
+          <div className={styles.userInfo}>
+            <User size={18} />
+            <span className={styles.username}>{user?.username}</span>
+          </div>
+          <button
+            onClick={logout}
+            className={styles.logoutButton}
+            title="Logout"
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className={styles.main}>
+        {children}
+      </main>
+    </div>
+  );
+}
+```
+
+**frontend/src/components/Layout.module.css - User Section Styles:**
+```css
+.userSection {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.username {
+  font-weight: 500;
+}
+
+.logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+}
+
+.logoutButton:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-error);
+}
+```
+
+---
+
+### 10.10 Testing & Validierung
+
+**Test 1: User Registration**
+1. Browser öffnen: http://localhost:5173/login
+2. ✅ "Sign Up" klicken
+3. ✅ Username (min. 3 Zeichen) + Password (min. 6 Zeichen) eingeben
+4. ✅ Submit → Erfolgreiche Registration + Auto-Login
+5. ✅ Redirect zu Tracker Page
+6. ✅ Username in Sidebar sichtbar
+
+**Test 2: User Login**
+1. Logout klicken → Redirect zu /login
+2. ✅ Username + Password eingeben
+3. ✅ Submit → Erfolgreicher Login
+4. ✅ Token in localStorage gespeichert
+5. ✅ Redirect zu /tracker
+6. ✅ Bestehende Projekte des Users laden
+
+**Test 3: Data Isolation**
+1. User A einloggen
+2. ✅ Projekt "Project A" erstellen
+3. ✅ Todos für Project A erstellen
+4. ✅ Time Entry starten
+5. Logout
+6. User B einloggen (neuer User)
+7. ✅ Projekte leer (User A's Projekte nicht sichtbar)
+8. ✅ User B kann eigene Projekte erstellen
+9. ✅ User A einloggen → Alle Daten noch vorhanden
+
+**Test 4: Token Expiration**
+1. Token manuell aus localStorage löschen
+2. ✅ Refresh → Redirect zu /login
+3. ✅ API Request ohne Token → 401 Unauthorized
+4. ✅ Login → Neue API Requests mit Token erfolgreich
+
+**Test 5: Protected Routes**
+1. Browser öffnen ohne Login: http://localhost:5173/tracker
+2. ✅ Automatischer Redirect zu /login
+3. ✅ Nach Login: Redirect zurück zu /tracker
+4. ✅ Direkte URL-Navigation nur mit gültigem Token
+
+**Test 6: Logout**
+1. Eingeloggt im Tracker
+2. ✅ Logout Button in Sidebar klicken
+3. ✅ Token aus localStorage entfernt
+4. ✅ Redirect zu /login
+5. ✅ User State cleared
+6. ✅ Zurück-Button führt zu Login (nicht zur App)
+
+**Validierung Checkliste:**
+
+**Backend:**
+- ✅ User Model mit bcrypt password hashing
+- ✅ JWT Token Generation & Validation
+- ✅ /api/auth/register Endpoint
+- ✅ /api/auth/login Endpoint
+- ✅ /api/auth/me Endpoint
+- ✅ get_current_user Dependency
+- ✅ Alle Endpoints protected (Depends(get_current_user))
+- ✅ User ID in allen Models (Projects, TimeEntries, Settings)
+- ✅ Filter nach user_id in allen GET Endpoints
+- ✅ Ownership Validation in UPDATE/DELETE
+
+**Frontend:**
+- ✅ AuthContext mit login/register/logout
+- ✅ Token in localStorage persistence
+- ✅ LoginPage mit Register Toggle
+- ✅ ProtectedRoute Component
+- ✅ API Client mit Authorization Headers
+- ✅ User Info in Sidebar
+- ✅ Logout Button funktional
+- ✅ Loading States während Auth
+- ✅ Error Handling (wrong password, username taken)
+- ✅ Auto-redirect nach Login/Logout
+
+**Security:**
+- ✅ Passwords gehashed (bcrypt)
+- ✅ JWT Token mit Expiration
+- ✅ Bearer Token in Authorization Header
+- ✅ 401 Unauthorized bei invalid token
+- ✅ User Isolation in Database Queries
+- ✅ Keine User-Daten über API exposed (außer username)
+
+**UX:**
+- ✅ Login Form Validation (min length)
+- ✅ Error Messages bei Login/Register Fehlern
+- ✅ Loading States in Login Form
+- ✅ Smooth Redirects
+- ✅ Logout Confirmation (optional)
+- ✅ Remember Me über localStorage
+
+---
+
+### 10.11 Optional: Zusätzliche Features
+
+**Nice-to-Have (nicht im Scope, aber erwähnenswert):**
+
+1. **Email statt Username:**
+   - User Model: `email` field mit validation
+   - Forgot Password Flow
+
+2. **Refresh Tokens:**
+   - Längere Session mit Refresh Token
+   - Access Token kürzer (15 min)
+
+3. **Profile Page:**
+   - Username ändern
+   - Password ändern
+   - Account löschen
+
+4. **Admin Panel:**
+   - User Management
+   - Statistics über alle User
+
+5. **Social Login:**
+   - OAuth2 (Google, GitHub)
+   - FastAPI Social Auth
+
+**Für diesen Plan: Fokus auf einfachen Username/Password Login mit JWT Tokens.**
+
+---
+
+**Phase 10 Status:** Bereit zur Implementierung
+
+**Nächste Schritte:**
+1. Backend Models + Migration
+2. Auth Endpoints implementieren
+3. Frontend AuthContext + LoginPage
+4. Protected Routes einbauen
+5. Testing mit mehreren Usern
+
+---
