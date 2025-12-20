@@ -4100,14 +4100,1448 @@ export default function App() {
 
 ---
 
-## Phase 7: Final Polish & Deployment (Optional)
+## Phase 7: Final Polish & Production Readiness
 
-**Nächster Schritt:** App deployment-ready machen
-- Environment Variables für Production
-- Build Optimization
-- Error Boundaries
-- Loading States überall
-- Docker Setup
-- Deployment Guide (Vercel Frontend + Railway/Render Backend)
+**Ziel:** App production-ready machen mit Error Handling, Loading States, Accessibility und Backend-Verbesserungen
+
+**Wichtig:** Phase 6 muss abgeschlossen sein (Settings funktionieren)
+
+**Was wird gemacht:**
+
+1. **Error Boundaries** (Frontend):
+   - React Error Boundary Component für unerwartete Fehler
+   - Fallback-UI statt weißer Seite
+   - Error-Logging (Console + Optional: Sentry)
+   
+2. **Loading States** (Frontend):
+   - Zentrale Loading Component (Spinner)
+   - Skeleton Screens für Listen (Projects, TimeEntries, Todos)
+   - Loading-States in allen API-Calls konsistent
+   - Progress Indicator für Timer-Saves
+   
+3. **Toast Notification System** (Frontend):
+   - Zentrale Toast-Component für Erfolgs-/Fehlermeldungen
+   - Toast Context + Provider
+   - Auto-Dismiss nach 3-5 Sekunden
+   - Success/Error/Info Varianten
+   
+4. **Accessibility (A11y)** (Frontend):
+   - ARIA Labels für Screen Reader
+   - Keyboard Navigation (Tab-Order, Enter/Space)
+   - Focus Management (Modals, Dialogs)
+   - Contrast-Check (WCAG AA Standard)
+   
+5. **Backend Improvements**:
+   - Strukturiertes Logging (Python logging module)
+   - Besseres Error Handling (Try-Catch, HTTP Exceptions)
+   - Environment Variables (.env für DB-Pfad, CORS, Port)
+   - CORS für Production-Domain konfigurieren
+
+**Flow:**
+1. Fehler passiert → Error Boundary fängt ab → Fallback-UI
+2. API Call → Loading Spinner → Daten geladen → Content
+3. Aktion erfolgreich → Toast erscheint → Auto-Dismiss
+4. Docker: `docker-compose up` → Backend + Frontend starten
+
+**Dependencies:**
+- Frontend: Keine neuen (evt. `react-hot-toast` für Toasts)
+- Backend: `python-dotenv` für Environment Variables
+- Docker: `docker`, `docker-compose`
+
+**Flow:**
+1. Fehler passiert → Error Boundary fängt ab → Fallback-UI
+2. API Call → Loading Spinner → Daten geladen → Content
+3. Aktion erfolgreich → Toast erscheint → Auto-Dismiss
+4. User navigiert mit Keyboard → Tab-Order funktioniert
+5. Screen Reader → ARIA Labels werden vorgelesen
+
+**Dependencies:**
+- Frontend: Keine neuen Dependencies nötig
+- Backend: `python-dotenv` für Environment Variables
+
+**Code-Struktur:**
+- `frontend/src/components/ErrorBoundary.tsx` + `.module.css` (Error Boundary)
+- `frontend/src/components/Loading.tsx` + `.module.css` (Spinner Component)
+- `frontend/src/components/Skeleton.tsx` + `.module.css` (Skeleton Screens)
+- `frontend/src/components/Toast.tsx` + `.module.css` (Toast Component)
+- `frontend/src/context/ToastContext.tsx` (Toast Context + Provider)
+- `frontend/src/hooks/useToast.ts` (Toast Hook)
+- `backend/.env` + `backend/.env.example` (Environment Config)
+- `backend/main.py` Update (Logging, CORS, Error Handling)
+- `backend/requirements.txt` Update (python-dotenv)
+
+---
+
+### 7.1 Error Boundary (Frontend)
+
+**components/ErrorBoundary.tsx:**
+```typescript
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import Button from './ui/Button';
+import styles from './ErrorBoundary.module.css';
+
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Uncaught error:', error, errorInfo);
+    // Optional: Send to error tracking service (Sentry, LogRocket, etc.)
+  }
+
+  private handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.href = '/'; // Navigate to home
+  };
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className={styles.container}>
+          <div className={styles.content}>
+            <AlertTriangle size={48} className={styles.icon} />
+            <h1 className={styles.title}>Oops! Something went wrong</h1>
+            <p className={styles.message}>
+              We're sorry for the inconvenience. The error has been logged.
+            </p>
+            {this.state.error && (
+              <details className={styles.details}>
+                <summary>Error Details</summary>
+                <pre>{this.state.error.toString()}</pre>
+              </details>
+            )}
+            <div className={styles.actions}>
+              <Button onClick={this.handleReset}>Go to Home</Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Reload Page
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+```
+
+**components/ErrorBoundary.module.css:**
+```css
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: #f8fafc;
+}
+
+.content {
+  max-width: 32rem;
+  text-align: center;
+  background: white;
+  padding: 3rem 2rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.icon {
+  color: #ef4444;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.75rem 0;
+}
+
+.message {
+  color: #64748b;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.6;
+}
+
+.details {
+  text-align: left;
+  background: #f1f5f9;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.5rem;
+}
+
+.details pre {
+  color: #ef4444;
+  overflow-x: auto;
+  margin: 0.5rem 0 0 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+  }
+}
+```
+
+**App.tsx Update (Wrap mit ErrorBoundary):**
+```typescript
+import ErrorBoundary from '@/components/ErrorBoundary';
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <StoreProvider>
+        <Router>
+          {/* existing routes */}
+        </Router>
+      </StoreProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+---
+
+### 7.2 Loading States (Frontend)
+
+**components/Loading.tsx:**
+```typescript
+import styles from './Loading.module.css';
+
+interface LoadingProps {
+  size?: 'sm' | 'md' | 'lg';
+  text?: string;
+}
+
+export default function Loading({ size = 'md', text }: LoadingProps) {
+  return (
+    <div className={styles.container}>
+      <div className={`${styles.spinner} ${styles[size]}`} />
+      {text && <p className={styles.text}>{text}</p>}
+    </div>
+  );
+}
+```
+
+**components/Loading.module.css:**
+```css
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.spinner {
+  border: 3px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner.sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-width: 2px;
+}
+
+.spinner.md {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-width: 3px;
+}
+
+.spinner.lg {
+  width: 4rem;
+  height: 4rem;
+  border-width: 4px;
+}
+
+.text {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+```
+
+**Skeleton Component für Listen:**
+```typescript
+// components/Skeleton.tsx
+import styles from './Skeleton.module.css';
+
+export default function Skeleton({ count = 3 }: { count?: number }) {
+  return (
+    <div className={styles.container}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className={styles.item}>
+          <div className={styles.avatar} />
+          <div className={styles.content}>
+            <div className={styles.line} style={{ width: '60%' }} />
+            <div className={styles.line} style={{ width: '40%' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**components/Skeleton.module.css:**
+```css
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.item {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.line {
+  height: 1rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+```
+
+**TrackerPage Update (Loading State Beispiel):**
+```typescript
+import { useEffect, useState } from 'react';
+import Loading from '@/components/Loading';
+import Skeleton from '@/components/Skeleton';
+
+export default function TrackerPage() {
+  const [isLoading, setIsLoading] = useState(true);
+  const { projects, timeEntries, todos, refreshAll } = useStore();
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      await refreshAll();
+      setIsLoading(false);
+    };
+    loadData();
+  }, [refreshAll]);
+
+  if (isLoading) {
+    return (
+      <div className={styles.page}>
+        <Loading text="Loading..." />
+      </div>
+    );
+  }
+
+  // existing render
+}
+```
+
+---
+
+### 7.3 Toast Notification System (Frontend)
+
+**context/ToastContext.tsx:**
+```typescript
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+
+type ToastType = 'success' | 'error' | 'info';
+
+interface Toast {
+  id: string;
+  message: string;
+  type: ToastType;
+}
+
+interface ToastContextType {
+  toasts: Toast[];
+  showToast: (message: string, type?: ToastType) => void;
+  removeToast: (id: string) => void;
+}
+
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const toast: Toast = { id, message, type };
+    
+    setToasts((prev) => [...prev, toast]);
+
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+      removeToast(id);
+    }, 3000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
+      {children}
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error('useToast must be used within ToastProvider');
+  }
+  return context;
+}
+```
+
+**components/Toast.tsx:**
+```typescript
+import { useToast } from '@/context/ToastContext';
+import { CheckCircle, XCircle, Info, X } from 'lucide-react';
+import styles from './Toast.module.css';
+
+export default function Toast() {
+  const { toasts, removeToast } = useToast();
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'success':
+        return <CheckCircle size={20} />;
+      case 'error':
+        return <XCircle size={20} />;
+      default:
+        return <Info size={20} />;
+    }
+  };
+
+  return (
+    <div className={styles.container}>
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`${styles.toast} ${styles[toast.type]}`}>
+          <div className={styles.icon}>{getIcon(toast.type)}</div>
+          <p className={styles.message}>{toast.message}</p>
+          <button
+            className={styles.close}
+            onClick={() => removeToast(toast.id)}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**components/Toast.module.css:**
+```css
+.container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  pointer-events: auto;
+  min-width: 18rem;
+  animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+  border-left: 4px solid #10b981;
+}
+
+.toast.success .icon {
+  color: #10b981;
+}
+
+.toast.error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast.error .icon {
+  color: #ef4444;
+}
+
+.toast.info {
+  border-left: 4px solid #6366f1;
+}
+
+.toast.info .icon {
+  color: #6366f1;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.message {
+  flex: 1;
+  margin: 0;
+  font-size: 0.875rem;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.close {
+  flex-shrink: 0;
+  padding: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+}
+
+.close:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .toast {
+    min-width: auto;
+  }
+}
+```
+
+**App.tsx Update (Add Toast):**
+```typescript
+import { ToastProvider } from '@/context/ToastContext';
+import Toast from '@/components/Toast';
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <StoreProvider>
+          <Router>
+            {/* routes */}
+          </Router>
+          <Toast />
+        </StoreProvider>
+      </ToastProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+**Usage Beispiel (PomodoroSettings):**
+```typescript
+import { useToast } from '@/context/ToastContext';
+
+function PomodoroSettings() {
+  const { showToast } = useToast();
+
+  const handleSave = async () => {
+    try {
+      await api.pomodoroSettings.update({ focus_duration, break_duration });
+      await refreshPomodoroSettings();
+      showToast('Settings saved successfully!', 'success');
+    } catch (error) {
+      showToast('Failed to save settings', 'error');
+    }
+  };
+}
+```
+
+---
+
+### 7.4 Accessibility (A11y) Improvements
+
+**Keyboard Navigation in Timer:**
+```typescript
+// Timer.tsx Update
+<button
+  onClick={handleStart}
+  aria-label={isRunning ? 'Pause timer' : 'Start timer'}
+  tabIndex={0}
+>
+  {isRunning ? <Pause /> : <Play />}
+</button>
+
+<button
+  onClick={handleReset}
+  aria-label="Reset timer"
+  tabIndex={0}
+  disabled={!isRunning && time === duration}
+>
+  <Square />
+</button>
+```
+
+**Focus Management in Modals/Forms:**
+```typescript
+// Input Component Update
+export default function Input({ label, ...props }: InputProps) {
+  const id = useId(); // React 18
+
+  return (
+    <div className={styles.group}>
+      <label htmlFor={id} className={styles.label}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className={styles.input}
+        aria-required={props.required}
+        aria-invalid={props['aria-invalid']}
+        {...props}
+      />
+    </div>
+  );
+}
+```
+
+**Screen Reader Announcements:**
+```typescript
+// Add visually-hidden class for screen readers
+// index.css Update
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+```
+
+**ARIA Live Regions für Timer:**
+```typescript
+// Timer.tsx Update
+<div aria-live="polite" aria-atomic="true" className="sr-only">
+  Timer: {formatTime(time)}
+</div>
+```
+
+---
+
+### 7.5 Backend Improvements
+
+**backend/.env.example:**
+```env
+# Database
+DATABASE_URL=sqlite:///./timetracking.db
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+
+# CORS
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174,https://yourdomain.com
+
+# Logging
+LOG_LEVEL=INFO
+```
+
+**backend/.env:**
+```env
+DATABASE_URL=sqlite:///./timetracking.db
+HOST=0.0.0.0
+PORT=8000
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+LOG_LEVEL=DEBUG
+```
+
+**backend/main.py Update (Environment Variables + Logging):**
+```python
+import os
+import logging
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Timetracking API")
+
+# CORS with environment variable
+origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Error Handling Example
+@app.get("/api/projects")
+def get_projects(db: Session = Depends(get_db)):
+    try:
+        logger.info("Fetching all projects")
+        projects = db.query(models.Project).all()
+        return projects
+    except Exception as e:
+        logger.error(f"Error fetching projects: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Database URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./timetracking.db")
+```
+
+**requirements.txt Update:**
+```txt
+fastapi==0.104.1
+uvicorn==0.24.0
+sqlalchemy==2.0.23
+pydantic==2.5.0
+python-dotenv==1.0.0
+```
+
+---
+
+### 7.6 Test Phase 7
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Test 1: Error Boundary**
+1. Navigiere zu einer Seite
+2. Öffne DevTools Console
+3. Simuliere Fehler: In Browser Console eingeben: `throw new Error('Test error')`
+4. Error Boundary Fallback sollte erscheinen
+5. "Go to Home" Button funktioniert
+6. Seite neu laden → App funktioniert normal
+
+**Test 2: Loading States**
+1. Navigiere zu `/` (Tracker)
+2. Refresh → Loading Spinner erscheint kurz
+3. Navigiere zu `/stats` → Loading während Datenverarbeitung
+4. Network Throttling (DevTools): "Slow 3G" → Loading States länger sichtbar
+
+**Test 3: Toast Notifications**
+1. Navigiere zu `/settings`
+2. Ändere Werte und speichere
+3. Grüner Success-Toast erscheint oben rechts
+4. Toast verschwindet nach 3 Sekunden
+5. Ungültige Werte → Error Toast
+6. Mehrere Aktionen → Toasts stapeln sich
+
+**Test 4: Accessibility**
+1. Keyboard Navigation:
+   - Tab durch alle interaktiven Elemente
+   - Enter/Space aktiviert Buttons
+   - Timer mit Keyboard steuerbar
+2. Screen Reader (VoiceOver macOS / NVDA Windows):
+   - Labels werden vorgelesen
+   - Button-Zweck erkennbar
+   - Live Regions für Timer
+3. Contrast Check (DevTools Lighthouse):
+   - Accessibility Score > 90
+
+**Test 5: Backend Logging**
+1. Backend Terminal zeigt strukturierte Logs:
+   ```
+   2025-12-20 10:00:00 - main - INFO - Fetching all projects
+   2025-12-20 10:00:01 - main - INFO - Project created: Website Redesign
+   ```
+2. Fehler werden geloggt mit Traceback
+3. Environment Variables funktionieren (`.env` wird gelesen)
+
+**Validierung:**
+- ✅ Error Boundary fängt Fehler ab, Fallback-UI funktioniert
+- ✅ Loading States in allen Pages (Tracker, Stats, Todos, Settings)
+- ✅ Toast System funktioniert (Success, Error, Auto-Dismiss)
+- ✅ Keyboard Navigation vollständig
+- ✅ ARIA Labels vorhanden
+- ✅ Backend Logging strukturiert
+- ✅ Environment Variables funktionieren
+
+**Performance Check:**
+- Lighthouse Audit (DevTools):
+  - Performance: > 90
+  - Accessibility: > 90
+  - Best Practices: > 90
+  - SEO: > 80
+
+**Code-Konsistenz Check:**
+- ✅ Error Boundary als Class Component (React Pattern)
+- ✅ Loading/Skeleton mit CSS Animations
+- ✅ Toast Context + Provider Pattern
+- ✅ useToast Hook für einfache Nutzung
+- ✅ Backend mit python-dotenv + logging
+- ✅ ARIA Labels + Keyboard Navigation
+
+---
+
+## Phase 8: Docker & Deployment
+
+**Ziel:** Docker Setup und Production Deployment auf Cloud-Platformen
+
+**Wichtig:** Phase 7 muss abgeschlossen sein (Error Handling, Loading States, Logging funktionieren)
+
+**Was wird gemacht:**
+
+1. **Docker Setup**:
+   - `Dockerfile` für Backend (Python + FastAPI)
+   - `Dockerfile` für Frontend (Node Build + Nginx)
+   - `docker-compose.yml` für lokales Multi-Container Setup
+   - `.dockerignore` Files
+   
+2. **Production Build**:
+   - Frontend Build Scripts optimieren
+   - Environment Templates (.env.example)
+   - Production Config für Nginx
+   
+3. **Deployment Guide**:
+   - Railway/Render für Backend
+   - Vercel für Frontend
+   - Environment Variables Setup
+   - CORS Configuration
+   
+4. **Documentation**:
+   - DEPLOYMENT.md mit Step-by-Step Anleitung
+   - README.md Update
+   - Docker-Anleitung
+
+**Flow:**
+1. Docker: `docker-compose up --build` → Backend + Frontend starten lokal
+2. Production: Frontend auf Vercel deployen
+3. Production: Backend auf Railway/Render deployen
+4. CORS: Backend Environment Variables mit Frontend-URL konfigurieren
+5. Testing: Production URLs testen
+
+**Dependencies:**
+- Docker + docker-compose installiert
+- Vercel Account (kostenlos)
+- Railway/Render Account (kostenlos)
+
+**Code-Struktur:**
+- `backend/Dockerfile` (Backend Container)
+- `backend/.dockerignore` (Docker Ignore)
+- `frontend/Dockerfile` (Frontend Container mit Nginx)
+- `frontend/.dockerignore` (Docker Ignore)
+- `frontend/nginx.conf` (Nginx Config)
+- `docker-compose.yml` (Orchestration im Root)
+- `DEPLOYMENT.md` (Deployment Guide)
+- `README.md` Update (Docker + Deployment Infos)
+
+---
+
+### 8.1 Docker Setup
+
+**backend/Dockerfile:**
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create database directory
+RUN mkdir -p /app/data
+
+# Expose port
+EXPOSE 8000
+
+# Run application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**backend/.dockerignore:**
+```
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+*.db
+.env
+.git
+```
+
+---
+
+### 8.2 Frontend Docker Setup
+
+**frontend/Dockerfile:**
+```dockerfile
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source
+COPY . .
+
+# Build
+RUN npm run build
+
+# Production stage
+FROM nginx:alpine
+
+# Copy build files
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**frontend/nginx.conf:**
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+**frontend/.dockerignore:**
+```
+node_modules
+dist
+.git
+.env
+*.log
+```
+
+---
+
+### 8.3 docker-compose.yml
+
+**docker-compose.yml (Root):**
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: timetracking-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/timetracking.db
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - LOG_LEVEL=INFO
+    volumes:
+      - backend-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: timetracking-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+```
+
+---
+
+### 8.4 Deployment Guide
+
+**DEPLOYMENT.md:**
+```markdown
+# Deployment Guide
+
+## Prerequisites
+- Git repository
+- Vercel account (Frontend)
+- Railway/Render account (Backend)
+- Docker (optional, for local testing)
+
+## Local Docker Deployment
+
+### 1. Build and Run with Docker Compose
+\`\`\`bash
+# From root directory
+docker-compose up --build
+
+# Access:
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+\`\`\`
+
+### 2. Stop Containers
+\`\`\`bash
+docker-compose down
+
+# Remove volumes (resets database)
+docker-compose down -v
+\`\`\`
+
+## Production Deployment
+
+### Backend (Railway/Render)
+
+#### Option 1: Railway
+1. Go to [railway.app](https://railway.app)
+2. Click "New Project" → "Deploy from GitHub repo"
+3. Select your repository
+4. Railway auto-detects Dockerfile
+5. Set environment variables:
+   - `DATABASE_URL`: Railway provides Postgres URL (or use SQLite)
+   - `CORS_ORIGINS`: Your frontend URL (e.g., `https://yourapp.vercel.app`)
+   - `LOG_LEVEL`: `INFO`
+6. Deploy → Get your backend URL (e.g., `https://yourapp.up.railway.app`)
+
+#### Option 2: Render
+1. Go to [render.com](https://render.com)
+2. New → Web Service
+3. Connect GitHub repo
+4. Settings:
+   - Root Directory: `backend`
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+5. Environment Variables (same as above)
+6. Create Web Service → Get URL
+
+### Frontend (Vercel)
+
+1. Go to [vercel.com](https://vercel.com)
+2. New Project → Import from Git
+3. Select your repository
+4. Settings:
+   - Root Directory: `frontend`
+   - Framework Preset: Vite
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+5. Environment Variables:
+   - `VITE_API_URL`: Your backend URL + `/api` (e.g., `https://yourapp.up.railway.app/api`)
+6. Deploy
+
+### Post-Deployment
+
+1. **Test Backend:**
+   ```bash
+   curl https://your-backend.railway.app/api/projects
+   ```
+
+2. **Test Frontend:**
+   - Visit your Vercel URL
+   - Check DevTools Network tab
+   - Verify API calls to backend work
+
+3. **Update CORS:**
+   - Add Vercel URL to backend `CORS_ORIGINS`
+   - Redeploy backend
+
+## Environment Variables Summary
+
+### Backend (.env)
+\`\`\`env
+DATABASE_URL=sqlite:///./data/timetracking.db
+CORS_ORIGINS=https://yourapp.vercel.app
+LOG_LEVEL=INFO
+HOST=0.0.0.0
+PORT=8000
+\`\`\`
+
+### Frontend (.env)
+\`\`\`env
+VITE_API_URL=https://yourapp.railway.app/api
+\`\`\`
+
+## Monitoring
+
+- **Railway:** Built-in logs and metrics
+- **Render:** Logs in dashboard
+- **Vercel:** Analytics and logs in dashboard
+
+## Troubleshooting
+
+### CORS Errors
+- Check `CORS_ORIGINS` in backend includes frontend URL
+- Verify frontend `VITE_API_URL` points to backend
+
+### Database Issues
+- Railway: Use Postgres instead of SQLite for production
+- Render: Add persistent disk for SQLite
+
+### Build Failures
+- Check Node version (use 20.x)
+- Check Python version (use 3.11)
+- Verify `package.json` and `requirements.txt`
+\`\`\`
+
+**README.md Update:**
+```markdown
+# Timetracking App
+
+Pomodoro-based time tracking application with project and todo management.
+
+## Features
+- ⏱️ Pomodoro Timer with Focus/Break modes
+- 📊 Statistics & Charts (Daily, Weekly, All-Time)
+- 📁 Project Management with color coding
+- ✅ Todo Management with project assignment
+- ⚙️ Customizable Pomodoro Settings
+- 📱 Responsive Design (Mobile & Desktop)
+
+## Tech Stack
+- **Frontend:** React 18 + TypeScript + Vite
+- **Backend:** FastAPI + SQLAlchemy + SQLite
+- **Charts:** Recharts
+- **Icons:** Lucide React
+- **Styling:** CSS Modules
+
+## Local Development
+
+### Prerequisites
+- Node.js 20+
+- Python 3.11+
+
+### Setup
+
+1. Clone repository:
+\`\`\`bash
+git clone <your-repo-url>
+cd TimetrackingApp
+\`\`\`
+
+2. Backend:
+\`\`\`bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\\Scripts\\activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+\`\`\`
+
+3. Frontend:
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+
+4. Open: http://localhost:5173
+
+## Docker
+
+\`\`\`bash
+docker-compose up --build
+\`\`\`
+
+Access:
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment guide.
+
+## License
+MIT
+\`\`\`
+
+---
+
+### 8.6 Test Phase 8
+
+```bash
+# Docker Containers müssen laufen
+```
+
+**Test 1: Docker Build**
+1. `docker-compose up --build` ausführen
+2. Backend Container startet erfolgreich
+3. Frontend Container startet erfolgreich
+4. Keine Build-Errors
+
+**Test 2: Docker Runtime**
+1. Frontend auf http://localhost:3000 erreichbar
+2. Backend auf http://localhost:8000 erreichbar
+3. API Docs: http://localhost:8000/docs funktioniert
+4. App vollständig funktionsfähig in Docker
+5. Daten persistieren (Volume funktioniert)
+6. `docker-compose down -v` → Datenbank reset funktioniert
+
+**Test 3: Production Build**
+1. Frontend Build:
+   ```bash
+   cd frontend
+   npm run build
+   npm run preview
+   ```
+2. Build erfolgreich (dist/ Ordner erstellt)
+3. Preview läuft ohne Fehler
+4. Assets optimiert (DevTools Network: Minified JS/CSS)
+5. Source Maps verfügbar für Debugging
+
+**Test 4: Production Deployment (Optional)**
+1. Backend auf Railway/Render deployen
+2. Frontend auf Vercel deployen
+3. Environment Variables konfiguriert
+4. CORS konfiguriert mit Frontend-URL
+5. API Calls funktionieren zwischen Frontend und Backend
+6. Production URLs erreichbar
+
+**Validierung:**
+- ✅ Docker Setup läuft (Backend + Frontend)
+- ✅ docker-compose.yml funktioniert
+- ✅ Volumes für Datenpersistenz
+- ✅ Production Build erfolgreich
+- ✅ DEPLOYMENT.md vorhanden mit Railway/Vercel Guide
+- ✅ README aktualisiert mit Docker-Anleitung
+- ✅ nginx.conf für optimales Frontend-Serving
+- ✅ .dockerignore Files vorhanden
+
+**Code-Konsistenz Check:**
+- ✅ Dockerfile Best Practices (Multi-Stage für Frontend)
+- ✅ docker-compose mit environment variables
+- ✅ Backend .env.example Template
+- ✅ Frontend nginx.conf für SPA-Routing
+- ✅ .dockerignore verhindert unnötige Files
+
+---
+
+---
+
+### 8.5 README Update
+
+**README.md Update:**
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Test 1: Error Boundary**
+1. Navigiere zu einer Seite
+2. Öffne DevTools Console
+3. Simuliere Fehler: In Browser Console eingeben: `throw new Error('Test error')`
+4. Error Boundary Fallback sollte erscheinen
+5. "Go to Home" Button funktioniert
+6. Seite neu laden → App funktioniert normal
+
+**Test 2: Loading States**
+1. Navigiere zu `/` (Tracker)
+2. Refresh → Loading Spinner erscheint kurz
+3. Navigiere zu `/stats` → Loading während Datenverarbeitung
+4. Network Throttling (DevTools): "Slow 3G" → Loading States länger sichtbar
+
+**Test 3: Toast Notifications**
+1. Navigiere zu `/settings`
+2. Ändere Werte und speichere
+3. Grüner Success-Toast erscheint oben rechts
+4. Toast verschwindet nach 3 Sekunden
+5. Ungültige Werte → Error Toast
+6. Mehrere Aktionen → Toasts stapeln sich
+
+**Test 4: Accessibility**
+1. Keyboard Navigation:
+   - Tab durch alle interaktiven Elemente
+   - Enter/Space aktiviert Buttons
+   - Timer mit Keyboard steuerbar
+2. Screen Reader (VoiceOver macOS / NVDA Windows):
+   - Labels werden vorgelesen
+   - Button-Zweck erkennbar
+   - Live Regions für Timer
+3. Contrast Check (DevTools Lighthouse):
+   - Accessibility Score > 90
+
+**Test 5: Backend Logging**
+1. Backend Terminal zeigt strukturierte Logs:
+   ```
+   2025-12-20 10:00:00 - main - INFO - Fetching all projects
+   2025-12-20 10:00:01 - main - INFO - Project created: Website Redesign
+   ```
+2. Fehler werden geloggt mit Traceback
+3. Environment Variables funktionieren (`.env` wird gelesen)
+
+**Test 6: Docker**
+1. `docker-compose up --build`
+2. Frontend auf http://localhost:3000 erreichbar
+3. Backend auf http://localhost:8000 erreichbar
+4. API Docs: http://localhost:8000/docs
+5. App funktioniert vollständig in Docker
+6. Daten persistieren (Volume funktioniert)
+7. `docker-compose down -v` → Datenbank reset
+
+**Test 7: Production Build**
+1. Frontend Build:
+   ```bash
+   cd frontend
+   npm run build
+   npm run preview  # Preview production build
+   ```
+2. Build erfolgreich (dist/ erstellt)
+3. Preview läuft ohne Fehler
+4. Assets optimiert (DevTools Network: Minified JS/CSS)
+
+**Validierung:**
+- ✅ Error Boundary fängt Fehler ab, Fallback-UI funktioniert
+- ✅ Loading States in allen Pages (Tracker, Stats, Todos, Settings)
+- ✅ Toast System funktioniert (Success, Error, Auto-Dismiss)
+- ✅ Keyboard Navigation vollständig
+- ✅ ARIA Labels vorhanden
+- ✅ Backend Logging strukturiert
+- ✅ Environment Variables funktionieren
+- ✅ Docker Setup läuft (Backend + Frontend)
+- ✅ Production Build erfolgreich
+- ✅ DEPLOYMENT.md vorhanden mit Railway/Vercel Guide
+- ✅ README aktualisiert
+
+**Performance Check:**
+- Lighthouse Audit (DevTools):
+  - Performance: > 90
+  - Accessibility: > 90
+  - Best Practices: > 90
+  - SEO: > 80
+
+**Code-Konsistenz Check:**
+- ✅ Error Boundary als Class Component (React Pattern)
+- ✅ Loading/Skeleton mit CSS Animations
+- ✅ Toast Context + Provider Pattern
+- ✅ useToast Hook für einfache Nutzung
+- ✅ Backend mit python-dotenv + logging
+- ✅ Dockerfile Best Practices (Multi-Stage für Frontend)
+- ✅ docker-compose mit Volumes für Datenpersistenz
+- ✅ nginx.conf für optimales Frontend-Serving
 
 ---

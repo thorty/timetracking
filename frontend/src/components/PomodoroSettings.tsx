@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
+import { useToast } from '@/context/ToastContext';
 import { api } from '@/lib/api';
-import { Clock, Check } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import Card from './ui/Card';
@@ -9,21 +10,21 @@ import styles from './PomodoroSettings.module.css';
 
 export default function PomodoroSettings() {
   const { pomodoroSettings, refreshPomodoroSettings } = useStore();
+  const { showToast } = useToast();
   const [focusDuration, setFocusDuration] = useState(pomodoroSettings.focus_duration);
   const [breakDuration, setBreakDuration] = useState(pomodoroSettings.break_duration);
   const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
     if (focusDuration < 1 || focusDuration > 60) {
-      alert('Focus duration must be between 1 and 60 minutes');
+      showToast('Focus duration must be between 1 and 60 minutes', 'error');
       return;
     }
     if (breakDuration < 1 || breakDuration > 60) {
-      alert('Break duration must be between 1 and 60 minutes');
+      showToast('Break duration must be between 1 and 60 minutes', 'error');
       return;
     }
 
@@ -35,14 +36,12 @@ export default function PomodoroSettings() {
       });
       await refreshPomodoroSettings();
       
-      // Show success message
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      showToast('Settings saved successfully!', 'success');
       
       console.log('✅ Pomodoro settings updated');
     } catch (error) {
       console.error('Failed to update settings:', error);
-      alert('Failed to save settings');
+      showToast('Failed to save settings', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -94,13 +93,6 @@ export default function PomodoroSettings() {
             Reset to Default
           </Button>
         </div>
-
-        {showSuccess && (
-          <div className={styles.success}>
-            <Check size={16} />
-            <span>Settings saved successfully!</span>
-          </div>
-        )}
       </form>
     </Card>
   );

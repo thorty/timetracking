@@ -1,6 +1,9 @@
 """
 FastAPI main application with CRUD endpoints
 """
+import os
+import logging
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -11,20 +14,34 @@ from pydantic import BaseModel
 import models
 from database import engine, get_db, Base
 
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI app
 app = FastAPI(title="Timetracking API")
 
-# CORS middleware for development
+# CORS with environment variable
+origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # SvelteKit dev server
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info(f"CORS origins configured: {origins}")
 
 
 # ===== Pydantic Schemas =====
