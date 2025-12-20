@@ -3,6 +3,7 @@ import { useStore } from '@/context/StoreContext';
 import { api } from '@/lib/api';
 import Timer from '@/components/Timer';
 import TodoSelector from '@/components/TodoSelector';
+import TimeEntryList from '@/components/TimeEntryList';
 import Card from '@/components/ui/Card';
 import styles from './TrackerPage.module.css';
 
@@ -59,6 +60,11 @@ export default function TrackerPage() {
           <p>Timer will track time for: <strong>{todos.find(t => t.id === selectedTodoId)?.title}</strong></p>
         </div>
       )}
+
+      {/* TimeEntries List */}
+      <div className={styles.entriesSection}>
+        <TimeEntryList />
+      </div>
     </div>
   );
 }

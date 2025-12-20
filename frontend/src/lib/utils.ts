@@ -22,12 +22,19 @@ export const COLORS = [
 export function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
   
   if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    if (minutes > 0) {
+      return `${hours}h ${minutes}min`;
+    }
+    return `${hours}h`;
   }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  
+  if (minutes > 0) {
+    return `${minutes}min`;
+  }
+  
+  return `${seconds}s`;
 }
 
 export function formatMinutes(minutes: number): string {

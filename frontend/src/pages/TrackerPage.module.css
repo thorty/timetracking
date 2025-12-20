@@ -43,6 +43,10 @@
   color: #0f172a;
 }
 
+.entriesSection {
+  margin-top: 3rem;
+}
+
 @media (max-width: 768px) {
   .card {
     padding: 1rem;
