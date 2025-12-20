@@ -7,7 +7,7 @@
 .title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .empty {
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
-  color: #94a3b8;
+  color: var(--color-text-tertiary);
   text-align: center;
   gap: 1rem;
 }
@@ -24,7 +24,7 @@
 .empty p {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .empty span {
@@ -42,13 +42,13 @@
   justify-content: space-between;
   align-items: center;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .date {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -56,7 +56,7 @@
 .total {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #6366f1;
+  color: var(--color-primary);
 }
 
 .entries {
@@ -70,15 +70,15 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
 }
 
 .entry:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  border-color: #cbd5e1;
+  box-shadow: var(--shadow-sm);
+  border-color: var(--color-border-hover);
 }
 
 .colorBadge {
@@ -106,7 +106,7 @@
 .projectName {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-text-secondary);
 }
 
 .separator {
@@ -132,7 +132,7 @@
 .duration {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-text-primary);
   flex-shrink: 0;
 }
 

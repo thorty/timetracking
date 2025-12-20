@@ -5545,3 +5545,712 @@ MIT
 - ✅ nginx.conf für optimales Frontend-Serving
 
 ---
+
+## Phase 9: Dark Mode & UI Optimierung
+
+**Ziel:** Vollständiger Dark Mode mit Persistence, Theme Toggle und optimierte UI
+
+### 9.1 Theme Context & Provider
+
+**Erstellen: frontend/src/context/ThemeContext.tsx**
+
+```typescript
+import { createContext, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+
+type Theme = 'light' | 'dark';
+
+interface ThemeContextType {
+  theme: Theme;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(() => {
+    // 1. localStorage
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    
+    // 2. System Preference
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    
+    // 3. Default
+    return 'light';
+  });
+
+  useEffect(() => {
+    // Update document class
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within ThemeProvider');
+  }
+  return context;
+}
+```
+
+### 9.2 CSS Variables für Theming
+
+**Aktualisieren: frontend/src/index.css**
+
+```css
+:root {
+  /* Light Theme (Default) */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f9fafb;
+  --color-bg-tertiary: #f3f4f6;
+  
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  
+  --color-border: #e5e7eb;
+  --color-border-hover: #d1d5db;
+  
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-primary-light: #eef2ff;
+  
+  --color-success: #10b981;
+  --color-success-light: #d1fae5;
+  --color-error: #ef4444;
+  --color-error-light: #fee2e2;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme='dark'] {
+  /* Dark Theme */
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
+  
+  --color-border: #334155;
+  --color-border-hover: #475569;
+  
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-primary-light: #1e1b4b;
+  
+  --color-success: #34d399;
+  --color-success-light: #064e3b;
+  --color-error: #f87171;
+  --color-error-light: #7f1d1d;
+  --color-warning: #fbbf24;
+  --color-warning-light: #78350f;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+#root {
+  min-height: 100vh;
+}
+```
+
+### 9.3 Theme Toggle Button Component
+
+**Erstellen: frontend/src/components/ThemeToggle.tsx**
+
+```typescript
+import { Moon, Sun } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import styles from './ThemeToggle.module.css';
+
+export default function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <button
+      className={styles.toggle}
+      onClick={toggleTheme}
+      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+    >
+      {theme === 'light' ? (
+        <Moon className={styles.icon} />
+      ) : (
+        <Sun className={styles.icon} />
+      )}
+    </button>
+  );
+}
+```
+
+**Erstellen: frontend/src/components/ThemeToggle.module.css**
+
+```css
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.toggle:hover {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+  transform: scale(1.05);
+}
+
+.toggle:active {
+  transform: scale(0.95);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  transition: transform var(--transition-fast);
+}
+
+.toggle:hover .icon {
+  transform: rotate(15deg);
+}
+
+[data-theme='dark'] .toggle {
+  box-shadow: var(--shadow-sm);
+}
+```
+
+### 9.4 Sidebar/Layout Integration
+
+**Aktualisieren: frontend/src/components/Sidebar.tsx**
+
+Füge ThemeToggle in der Sidebar hinzu (z.B. unten oder oben im Header):
+
+```typescript
+import ThemeToggle from './ThemeToggle';
+
+// In der Sidebar-Komponente, z.B. im Header oder Footer:
+<div className={styles.header}>
+  <h1>Timetracking</h1>
+  <ThemeToggle />
+</div>
+```
+
+### 9.5 App.tsx Integration
+
+**Aktualisieren: frontend/src/App.tsx**
+
+```typescript
+import { BrowserRouter as Router } from 'react-router-dom';
+import { StoreProvider } from './context/StoreContext';
+import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import Toast from './components/Toast';
+// ... andere Imports
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ToastProvider>
+          <Router>
+            <StoreProvider>
+              {/* App Content */}
+            </StoreProvider>
+          </Router>
+          <Toast />
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+### 9.6 Komponenten CSS auf CSS Variables umstellen
+
+**Aktualisieren: Alle Component CSS Module**
+
+Ersetze hardcoded Colors durch CSS Variables:
+
+**Beispiel - Button.module.css:**
+
+```css
+.button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.button:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+}
+```
+
+**Beispiel - Card.module.css:**
+
+```css
+.card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-hover);
+}
+```
+
+**Beispiel - Input.module.css:**
+
+```css
+.input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.input::placeholder {
+  color: var(--color-text-tertiary);
+}
+```
+
+### 9.7 Timer Component Dark Mode Optimierung
+
+**Aktualisieren: frontend/src/components/Timer.module.css**
+
+Optimiere Timer für Dark Mode mit besseren Kontrasten:
+
+```css
+.timer {
+  text-align: center;
+  padding: 2rem;
+}
+
+.display {
+  font-size: 4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  margin: 2rem 0;
+  color: var(--color-text-primary);
+  text-shadow: var(--shadow-sm);
+}
+
+.modeIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  transition: all var(--transition-fast);
+}
+
+[data-theme='dark'] .modeIndicator {
+  box-shadow: var(--shadow-sm);
+}
+
+.focus {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.break {
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+```
+
+### 9.8 Statistics Charts Dark Mode
+
+**Aktualisieren: frontend/src/pages/StatsPage.tsx**
+
+Passe Recharts Theme dynamisch an:
+
+```typescript
+import { useTheme } from '../context/ThemeContext';
+
+export default function StatsPage() {
+  const { theme } = useTheme();
+  
+  // Chart Colors basierend auf Theme
+  const chartColors = {
+    primary: theme === 'dark' ? '#818cf8' : '#6366f1',
+    success: theme === 'dark' ? '#34d399' : '#10b981',
+    text: theme === 'dark' ? '#cbd5e1' : '#6b7280',
+    grid: theme === 'dark' ? '#334155' : '#e5e7eb',
+  };
+
+  return (
+    // ... Stats Content
+    <BarChart data={data}>
+      <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+      <XAxis 
+        dataKey="name" 
+        stroke={chartColors.text}
+        style={{ fontSize: '0.75rem' }}
+      />
+      <YAxis 
+        stroke={chartColors.text}
+        style={{ fontSize: '0.75rem' }}
+      />
+      <Tooltip
+        contentStyle={{
+          backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
+          border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}`,
+          borderRadius: '8px',
+          color: chartColors.text,
+        }}
+      />
+      <Bar dataKey="hours" fill={chartColors.primary} radius={[8, 8, 0, 0]} />
+    </BarChart>
+  );
+}
+```
+
+### 9.9 Loading & Skeleton Dark Mode
+
+**Aktualisieren: frontend/src/components/Skeleton.module.css**
+
+```css
+.item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: var(--color-bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-tertiary) 0%,
+    var(--color-border) 50%,
+    var(--color-bg-tertiary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.content {
+  flex: 1;
+}
+
+.line {
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-tertiary) 0%,
+    var(--color-border) 50%,
+    var(--color-bg-tertiary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+```
+
+### 9.10 Toast Dark Mode
+
+**Aktualisieren: frontend/src/components/Toast.module.css**
+
+```css
+.container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.toast {
+  min-width: 300px;
+  padding: 1rem 1.25rem;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  pointer-events: auto;
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.success {
+  border-left: 4px solid var(--color-success);
+}
+
+.error {
+  border-left: 4px solid var(--color-error);
+}
+
+.info {
+  border-left: 4px solid var(--color-primary);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.success .icon {
+  color: var(--color-success);
+}
+
+.error .icon {
+  color: var(--color-error);
+}
+
+.info .icon {
+  color: var(--color-primary);
+}
+
+.message {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+  border-radius: 4px;
+}
+
+.close:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    left: 1rem;
+    right: 1rem;
+  }
+  
+  .toast {
+    min-width: unset;
+  }
+}
+```
+
+---
+
+## Testing Phase 9
+
+**Test 1: Theme Toggle**
+1. App öffnen im Browser
+2. Theme Toggle Button in Sidebar klicken
+3. ✅ Theme wechselt zwischen Light/Dark
+4. ✅ Smooth Transitions (keine Flackern)
+5. ✅ Icon wechselt (Sun ↔ Moon)
+
+**Test 2: Theme Persistence**
+1. Dark Mode aktivieren
+2. Browser-Tab schließen
+3. App neu öffnen
+4. ✅ Dark Mode ist noch aktiv (localStorage funktioniert)
+
+**Test 3: System Preference**
+1. localStorage löschen: `localStorage.removeItem('theme')`
+2. Browser Dark Mode aktivieren (System Settings)
+3. App neu laden
+4. ✅ App respektiert System Preference
+
+**Test 4: Alle Komponenten Dark Mode**
+Prüfe jede Page/Component:
+- ✅ Tracker Page: Timer, Buttons, Cards
+- ✅ Stats Page: Charts (Farben), Cards, Text
+- ✅ Todos Page: Todo-Liste, Checkboxen, Inputs
+- ✅ Settings Page: Form-Inputs, Buttons
+- ✅ Sidebar: Navigation, Active States
+- ✅ Toast Notifications: Success, Error, Info
+- ✅ Loading States & Skeletons
+- ✅ Error Boundary Fallback
+
+**Test 5: Kontrast & Accessibility**
+1. DevTools → Lighthouse → Accessibility Audit
+2. ✅ Accessibility Score > 90
+3. ✅ Kontrast-Ratio erfüllt WCAG AA (4.5:1)
+4. Dark Mode Farben getestet mit Contrast Checker
+
+**Test 6: Performance**
+1. Theme Toggle mehrmals schnell klicken
+2. ✅ Keine Performance-Probleme
+3. ✅ Transitions smooth (keine Layout Shifts)
+4. DevTools Performance: Kein Memory Leak
+
+**Test 7: Cross-Browser**
+- ✅ Chrome/Edge: Dark Mode funktioniert
+- ✅ Firefox: Dark Mode funktioniert
+- ✅ Safari: Dark Mode funktioniert
+- ✅ Mobile Safari: Dark Mode funktioniert
+
+**Validierung:**
+- ✅ ThemeContext + Provider implementiert
+- ✅ Theme Toggle Button in Sidebar
+- ✅ CSS Variables für alle Colors
+- ✅ Alle Component CSS auf Variables umgestellt
+- ✅ Dark Theme in index.css definiert
+- ✅ localStorage Persistence funktioniert
+- ✅ System Preference Detection funktioniert
+- ✅ Smooth Transitions (background, colors)
+- ✅ Charts Dark Mode kompatibel
+- ✅ Toast, Loading, Skeleton Dark Mode ready
+- ✅ Accessibility Standards erfüllt
+- ✅ Keine hardcoded Colors mehr im Code
+
+**Code-Konsistenz Check:**
+- ✅ ThemeContext folgt Context Pattern (wie ToastContext)
+- ✅ useTheme Hook mit Error Handling
+- ✅ CSS Variables Convention: `--color-*`, `--shadow-*`
+- ✅ data-theme Attribut am html Element
+- ✅ TypeScript Types für Theme ('light' | 'dark')
+- ✅ localStorage Key: 'theme'
+- ✅ Fallback: System Preference → Default 'light'
+
+**UI/UX Check:**
+- ✅ Toggle Button Position logisch (Sidebar Header/Footer)
+- ✅ Icon Animation on Hover (Rotation)
+- ✅ Tooltip/aria-label vorhanden
+- ✅ Kein Flackern beim Theme Switch
+- ✅ Alle Farben haben ausreichend Kontrast
+- ✅ Focus States sichtbar in beiden Themes
+
+---

@@ -18,7 +18,7 @@
 .title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-text-primary);
   margin: 0;
 }
 

@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import { useStore } from '@/context/StoreContext';
+import { useTheme } from '@/context/ThemeContext';
 import { COLORS } from '@/lib/utils';
 import { formatDuration, getDaysArray, getDateString, getShortDate, getStartOfDay } from '@/lib/utils';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TrendingUp, Target, Flame, Clock } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import styles from './StatsPage.module.css';
 
 export default function StatsPage() {
   const { timeEntries, projects, todos } = useStore();
+  const { theme } = useTheme();
 
   // Heute Statistik
   const todayStats = useMemo(() => {
@@ -124,6 +126,14 @@ export default function StatsPage() {
 
   const maxTaskDuration = topTasks.length > 0 ? topTasks[0].duration : 1;
 
+  // Chart Colors basierend auf Theme
+  const chartColors = {
+    text: theme === 'dark' ? '#cbd5e1' : '#64748b',
+    grid: theme === 'dark' ? '#334155' : '#e2e8f0',
+    tooltipBg: theme === 'dark' ? '#1e293b' : '#ffffff',
+    tooltipBorder: theme === 'dark' ? '#334155' : '#e2e8f0',
+  };
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -189,9 +199,10 @@ export default function StatsPage() {
                   <Tooltip
                     formatter={(value: number | undefined) => value ? formatDuration(value) : ''}
                     contentStyle={{
-                      background: 'white',
-                      border: '1px solid #e2e8f0',
+                      background: chartColors.tooltipBg,
+                      border: `1px solid ${chartColors.tooltipBorder}`,
                       borderRadius: '0.5rem',
+                      color: chartColors.text,
                     }}
                   />
                 </PieChart>
@@ -215,24 +226,26 @@ export default function StatsPage() {
             {weekData.some(d => d.duration > 0) ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={weekData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tick={{ fontSize: 12, fill: chartColors.text }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0' }}
+                    axisLine={{ stroke: chartColors.grid }}
                   />
                   <YAxis
-                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tick={{ fontSize: 12, fill: chartColors.text }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0' }}
+                    axisLine={{ stroke: chartColors.grid }}
                     tickFormatter={(value) => `${Math.floor(value / 60)}m`}
                   />
                   <Tooltip
                     formatter={(value: number | undefined) => value ? formatDuration(value) : ''}
                     contentStyle={{
-                      background: 'white',
-                      border: '1px solid #e2e8f0',
+                      background: chartColors.tooltipBg,
+                      border: `1px solid ${chartColors.tooltipBorder}`,
                       borderRadius: '0.5rem',
+                      color: chartColors.text,
                     }}
                   />
                   <Bar dataKey="duration" fill="#6366f1" radius={[4, 4, 0, 0]} />

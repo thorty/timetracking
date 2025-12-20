@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Clock, CheckSquare, BarChart3, Settings } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 import styles from './Layout.module.css';
 
 interface LayoutProps {
@@ -15,6 +16,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className={styles.logo}>
           <Clock size={24} />
           <span>Timetracker</span>
+          <ThemeToggle />
         </div>
         
         <nav className={styles.nav}>
