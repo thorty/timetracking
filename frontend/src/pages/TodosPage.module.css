@@ -1,0 +1,98 @@
+.page {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #64748b;
+}
+
+.createForm {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+}
+
+.createForm form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.colorPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.colorLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.colorButton {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.colorButton:hover {
+  transform: scale(1.1);
+}
+
+.colorButton.selected {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+}
+
+.formActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #94a3b8;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
