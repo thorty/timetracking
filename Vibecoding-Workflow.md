@@ -18,21 +18,19 @@ https://code.visualstudio.com/docs/copilot/copilot-tips-and-tricks#_choose-the-r
 
 
 3. start building every step. 
-    Prompt: after each step, test everything, tell me how to test and what is done and how it works
 
-    looks good. go on with next setp. after each step, test everything, tell me what is done, how to test and how it works
+    WorkFlow: 
+    - Create feature branch or commit last changes
+    - Check description / Plan 
+    - Write ore Rewrite Implementation plan    
+    - start implementation
+    - test implementaion / check code
 
-    beschreibe erstmal phase 4 im IMPLEMENTATION_PLAN, so das die feature und der umsetzungsplan klar ist. 
+
+    Prompt Examples:     
+    - after each step, test everything, tell me how to test and what is done and how it works
+    - looks good. go on with next setp. after each step, test everything, tell me what is done, how to test and how it works
+    - beschreibe erstmal phase 4 im IMPLEMENTATION_PLAN, so das die feature und der umsetzungsplan klar ist. 
 
     
     - work with featurebranches at git
- 
-
-
-## Phase 6: Settings & Polish (Optional)
-
-**Nächster Schritt:** Pomodoro-Einstellungen editierbar machen + UI Polish
-- Settings Page für Focus/Break Duration
-- Dark Mode Toggle (optional)
-- Export TimeEntries als CSV
-- Projekt-Archivierung
