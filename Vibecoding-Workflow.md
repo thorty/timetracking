@@ -1,9 +1,4 @@
-# Links
-gthub copilot hacks: https://www.youtube.com/watch?v=0XoXNG65rfg
-https://code.visualstudio.com/docs/copilot/copilot-tips-and-tricks#_choose-the-right-copilot-tool
-
-
-# howto
+# GitHUb Copilot Workflow
 
 1. write app description as detailed as posible:
     - functions
@@ -34,3 +29,10 @@ https://code.visualstudio.com/docs/copilot/copilot-tips-and-tricks#_choose-the-r
 
     
     - work with featurebranches at git
+
+
+
+
+# Links
+- https://www.youtube.com/watch?v=0XoXNG65rfg
+- https://code.visualstudio.com/docs/copilot/copilot-tips-and-tricks#_choose-the-right-copilot-tool
