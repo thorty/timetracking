@@ -15,11 +15,12 @@
 3. start building every step. 
 
     WorkFlow: 
-    - Create feature branch or commit last changes
-    - Check description / Plan 
-    - Write ore Rewrite Implementation plan    
-    - start implementation
-    - test implementaion / check code
+    1. Create feature branch or commit last changes
+    2. Check description / Plan 
+    3. Write ore Rewrite Implementation plan    
+    4. Check implementation plan! ask questions, let modify
+    5. start implementation
+    6. test implementaion / check code
 
 
     Prompt Examples:     

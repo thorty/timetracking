@@ -3617,12 +3617,497 @@ export default function App() {
 
 ---
 
-## Phase 6: Settings & Polish (Optional)
+## Phase 6: Settings & Pomodoro Configuration
 
-**Nächster Schritt:** Pomodoro-Einstellungen editierbar machen + UI Polish
-- Settings Page für Focus/Break Duration
-- Dark Mode Toggle (optional)
-- Export TimeEntries als CSV
-- Projekt-Archivierung
+**Ziel:** Pomodoro-Timer Einstellungen bearbeitbar machen und UI-Verbesserungen
+
+**Wichtig:** Phase 5 muss abgeschlossen sein (Statistics funktionieren)
+
+**Was wird gemacht:**
+
+1. **PomodoroSettings Component** erstellen mit:
+   - Formular für Focus Duration (Minuten)
+   - Formular für Break Duration (Minuten)
+   - Speichern-Button mit API-Update
+   - Validierung (Min: 1, Max: 60 Minuten)
+   - Aktuelle Einstellungen anzeigen
+   
+2. **SettingsPage Component** mit:
+   - Header "Settings"
+   - PomodoroSettings Section
+   - Weitere Settings (Export)
+   - Erfolgs-Feedback nach Speichern
+
+3. **Backend Fix:** Sicherstellen dass /api/settings funktioniert
+   - Default Settings werden beim ersten GET erstellt
+   - PUT /api/settings aktualisiert Werte
+
+4. **Navigation Update:**
+   - Settings-Link in Sidebar/Mobile Nav hinzufügen
+   - Settings-Icon (lucide-react)
+
+5. **UI Polish:**
+   - Loading States für API Calls
+   - Success/Error Messages (Toast/Alert)
+   - Smooth Transitions
+
+**Flow:**
+1. User navigiert zu `/settings`
+2. SettingsPage lädt pomodoroSettings aus Store
+3. Form zeigt aktuelle Werte an
+4. User ändert Focus/Break Duration
+5. Klick "Save Settings" → PUT /api/settings
+6. refreshPomodoroSettings() aktualisiert Store
+7. Success Message erscheint
+8. Timer auf Homepage nutzt neue Werte
+
+**Dependencies:**
+- Bestehendes: useStore (pomodoroSettings, refreshPomodoroSettings), api.pomodoroSettings.update()
+- Backend: /api/settings Endpoint (bereits vorhanden)
+
+**Code-Struktur:**
+- `components/PomodoroSettings.tsx` + `PomodoroSettings.module.css` (Settings Form Component)
+- `pages/SettingsPage.tsx` + `SettingsPage.module.css` (Settings Page)
+- `components/Layout.tsx` Update (Settings Navigation Link)
+- `App.tsx` Update (Route `/settings`)
+
+---
+
+### 6.1 Backend Check & Fix
+
+**Backend sollte bereits funktionieren, aber prüfen:**
+
+Das Backend hat bereits die Endpoints in `backend/main.py`:
+- `GET /api/settings` - Gibt Pomodoro Settings zurück (erstellt Default wenn nicht vorhanden)
+- `PUT /api/settings` - Aktualisiert Settings
+
+Falls Probleme: Backend ist bereits korrekt implementiert mit Default-Werten:
+```python
+@app.get("/api/settings", response_model=PomodoroSettingsResponse)
+def get_settings(db: Session = Depends(get_db)):
+    """Get pomodoro settings (creates default if not exists)"""
+    settings = db.query(models.PomodoroSettings).filter(models.PomodoroSettings.id == 1).first()
+    
+    if not settings:
+        # Create default settings
+        settings = models.PomodoroSettings(
+            id=1,
+            focus_duration=25,
+            break_duration=5
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    
+    return settings
+```
+
+**Kein Backend-Code nötig** - Endpoints funktionieren bereits!
+
+### 6.2 PomodoroSettings Component
+
+**components/PomodoroSettings.tsx:**
+```typescript
+import { useState } from 'react';
+import { useStore } from '@/context/StoreContext';
+import { api } from '@/lib/api';
+import { Clock, Check } from 'lucide-react';
+import Input from './ui/Input';
+import Button from './ui/Button';
+import Card from './ui/Card';
+import styles from './PomodoroSettings.module.css';
+
+export default function PomodoroSettings() {
+  const { pomodoroSettings, refreshPomodoroSettings } = useStore();
+  const [focusDuration, setFocusDuration] = useState(pomodoroSettings.focus_duration);
+  const [breakDuration, setBreakDuration] = useState(pomodoroSettings.break_duration);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    if (focusDuration < 1 || focusDuration > 60) {
+      alert('Focus duration must be between 1 and 60 minutes');
+      return;
+    }
+    if (breakDuration < 1 || breakDuration > 60) {
+      alert('Break duration must be between 1 and 60 minutes');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await api.pomodoroSettings.update({
+        focus_duration: focusDuration,
+        break_duration: breakDuration,
+      });
+      await refreshPomodoroSettings();
+      
+      // Show success message
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      
+      console.log('✅ Pomodoro settings updated');
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      alert('Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    setFocusDuration(25);
+    setBreakDuration(5);
+  };
+
+  return (
+    <Card className={styles.card}>
+      <div className={styles.header}>
+        <Clock size={24} className={styles.icon} />
+        <div>
+          <h3 className={styles.title}>Pomodoro Timer</h3>
+          <p className={styles.subtitle}>Configure your focus and break durations</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSave} className={styles.form}>
+        <div className={styles.inputs}>
+          <Input
+            type="number"
+            label="Focus Duration (minutes)"
+            value={focusDuration}
+            onChange={(e) => setFocusDuration(Number(e.target.value))}
+            min={1}
+            max={60}
+            required
+          />
+          
+          <Input
+            type="number"
+            label="Break Duration (minutes)"
+            value={breakDuration}
+            onChange={(e) => setBreakDuration(Number(e.target.value))}
+            min={1}
+            max={60}
+            required
+          />
+        </div>
+
+        <div className={styles.actions}>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Settings'}
+          </Button>
+          <Button type="button" variant="outline" onClick={handleReset}>
+            Reset to Default
+          </Button>
+        </div>
+
+        {showSuccess && (
+          <div className={styles.success}>
+            <Check size={16} />
+            <span>Settings saved successfully!</span>
+          </div>
+        )}
+      </form>
+    </Card>
+  );
+}
+```
+
+**components/PomodoroSettings.module.css:**
+```css
+.card {
+  max-width: 40rem;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.icon {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0.25rem 0 0 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-top: 1.5rem;
+}
+
+.inputs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.success {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 0.5rem;
+  color: #166534;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}
+```
+
+### 6.3 SettingsPage
+
+**pages/SettingsPage.tsx:**
+```typescript
+import PomodoroSettings from '@/components/PomodoroSettings';
+import styles from './SettingsPage.module.css';
+
+export default function SettingsPage() {
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Settings</h1>
+        <p className={styles.subtitle}>Manage your app preferences</p>
+      </div>
+
+      <div className={styles.content}>
+        <section className={styles.section}>
+          <PomodoroSettings />
+        </section>
+
+        {/* Future sections can be added here:
+        <section className={styles.section}>
+          <ThemeSettings />
+        </section>
+        <section className={styles.section}>
+          <ExportSettings />
+        </section>
+        */}
+      </div>
+    </div>
+  );
+}
+```
+
+**pages/SettingsPage.module.css:**
+```css
+.page {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #64748b;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.section {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+```
+
+### 6.4 Layout Navigation Update
+
+**components/Layout.tsx - Settings Link hinzufügen:**
+
+Ergänze in beiden Navigationen (Desktop + Mobile) den Settings-Link:
+
+```typescript
+import { Clock, CheckSquare, BarChart3, Settings } from 'lucide-react';
+
+// In der Desktop Nav (nach /stats):
+<NavLink 
+  to="/settings" 
+  className={({ isActive }) => 
+    `${styles.navLink} ${isActive ? styles.active : ''}`
+  }
+>
+  <Settings size={20} />
+  <span>Settings</span>
+</NavLink>
+
+// In der Mobile Nav (nach /stats):
+<NavLink 
+  to="/settings" 
+  className={({ isActive }) => 
+    `${styles.mobileLink} ${isActive ? styles.active : ''}`
+  }
+>
+  <Settings size={24} />
+  <span>Settings</span>
+</NavLink>
+```
+
+### 6.5 App.tsx Update
+
+**App.tsx (VOLLSTÄNDIG - ersetzt Phase 5 Version):**
+```typescript
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { StoreProvider } from './context/StoreContext';
+import Layout from './components/Layout';
+import TrackerPage from './pages/TrackerPage';
+import TodosPage from './pages/TodosPage';
+import StatsPage from './pages/StatsPage';
+import SettingsPage from './pages/SettingsPage';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <StoreProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<TrackerPage />} />
+            <Route path="/todos" element={<TodosPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </Layout>
+      </StoreProvider>
+    </BrowserRouter>
+  );
+}
+```
+
+### 6.6 Test Phase 6
+
+```bash
+# Backend läuft auf Port 8000
+# Frontend läuft auf Port 5173
+```
+
+**Browser:** http://localhost:5173/settings
+
+✅ **Test-Checklist:**
+
+**Initial State:**
+1. Navigate zu `/settings` → Settings Page lädt
+2. PomodoroSettings Card zeigt aktuelle Werte (25 min / 5 min)
+3. Form-Felder sind editierbar
+
+**Settings ändern:**
+4. Ändere Focus Duration auf 30
+5. Ändere Break Duration auf 10
+6. Klick "Save Settings" → Button zeigt "Saving..."
+7. Success Message erscheint: "Settings saved successfully!"
+8. Message verschwindet nach 3 Sekunden
+
+**Validierung:**
+9. Setze Focus auf 0 → Alert: "Focus duration must be between 1 and 60 minutes"
+10. Setze Break auf 100 → Alert: "Break duration must be between 1 and 60 minutes"
+11. Setze gültige Werte → Speichern funktioniert
+
+**Integration Check:**
+12. Gehe zu `/` (Tracker)
+13. Timer zeigt neue Durations in Mode-Toggle (z.B. "Focus (30 min)")
+14. Starte Timer → Countdown beginnt mit neuer Duration
+
+**Reset Funktion:**
+15. Zurück zu `/settings`
+16. Klick "Reset to Default" → Werte werden 25/5
+17. Speichern → Neue Werte werden übernommen
+
+**Navigation:**
+18. Sidebar zeigt "Settings" Link mit Settings-Icon
+19. Mobile Nav zeigt Settings
+20. Active State funktioniert (Settings highlighted wenn auf /settings)
+
+**DevTools Console prüfen:**
+- `✅ Pomodoro settings updated` nach Speichern
+- Keine Errors
+
+**API-Requests in DevTools prüfen:**
+- `GET /api/settings` beim Laden der Seite (oder 404 → Backend erstellt Default)
+- `PUT /api/settings` nach "Save Settings" mit `{ focus_duration, break_duration }`
+- Response enthält aktualisierte Settings
+
+**Code-Konsistenz Check:**
+- ✅ Nutzt useStore (pomodoroSettings, refreshPomodoroSettings)
+- ✅ Nutzt bestehende UI Components (Input, Button, Card)
+- ✅ Nutzt api.pomodoroSettings.update()
+- ✅ CSS Modules Pattern
+- ✅ lucide-react Icons (Clock, Check, Settings)
+- ✅ Validierung vor API Call
+- ✅ Loading State während Save
+- ✅ Success Feedback nach Save
+- ✅ Responsive Design
+
+**Visuelle Validierung:**
+- Card hat Icon + Title + Subtitle
+- Form Grid: 2 Spalten auf Desktop, 1 auf Mobile
+- Buttons nebeneinander (Desktop), gestapelt (Mobile)
+- Success Message grün mit Check-Icon
+- Settings-Link in Navigation sichtbar
+
+**Backend Check:**
+- Backend erstellt automatisch Default Settings (25/5) wenn nicht vorhanden
+- PUT /api/settings aktualisiert DB korrekt
+- GET /api/settings liefert aktualisierte Werte
+
+---
+
+## Phase 7: Final Polish & Deployment (Optional)
+
+**Nächster Schritt:** App deployment-ready machen
+- Environment Variables für Production
+- Build Optimization
+- Error Boundaries
+- Loading States überall
+- Docker Setup
+- Deployment Guide (Vercel Frontend + Railway/Render Backend)
 
 ---

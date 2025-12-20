@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Clock, CheckSquare, BarChart3 } from 'lucide-react';
+import { Clock, CheckSquare, BarChart3, Settings } from 'lucide-react';
 import styles from './Layout.module.css';
 
 interface LayoutProps {
@@ -45,6 +45,15 @@ export default function Layout({ children }: LayoutProps) {
             <BarChart3 size={20} />
             <span>Stats</span>
           </NavLink>
+          <NavLink 
+            to="/settings" 
+            className={({ isActive }) => 
+              `${styles.navLink} ${isActive ? styles.active : ''}`
+            }
+          >
+            <Settings size={20} />
+            <span>Settings</span>
+          </NavLink>
         </nav>
       </aside>
 
@@ -79,6 +88,15 @@ export default function Layout({ children }: LayoutProps) {
         >
           <BarChart3 size={24} />
           <span>Stats</span>
+        </NavLink>
+        <NavLink 
+          to="/settings" 
+          className={({ isActive }) => 
+            `${styles.mobileLink} ${isActive ? styles.active : ''}`
+          }
+        >
+          <Settings size={24} />
+          <span>Settings</span>
         </NavLink>
       </nav>
     </div>
