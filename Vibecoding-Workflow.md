@@ -1,47 +1,46 @@
-# GitHUb Copilot Workflow
+# GitHub Copilot Workflow
 
-1. write app description as detailed as posible:
-    - functions
-    - design
-    - techstack (ask copilot what is the best for your app, discuss, descide ) -> modify description
+1. Write the app description as detailed as possible:
+    - Functions
+    - Design
+    - Tech stack (ask Copilot for the best options for your app, discuss, decide) -> modify the description
 
-2. let llm write implementation plan: 
-- store in markdown
-- iterative
-- let the llm check the plan
-- every feature one step!
+2. Let an LLM write the implementation plan:
+    - Store it in Markdown
+    - Make it iterative
+    - Let the LLM check the plan
+    - Implement every feature step by step
 
-! use one of the biggest models for that task (eg claude 4.5)
+    `Use one of the most advanced models for this task (e.g., Claude 4.5).`
 
+3. Building Workflow:
 
-3. Building workflow: 
+    `Use a smaller model for implementation, faster and more straightforward than others.`
 
-! use a smaller model for implementation, faster and mor streight forward then others.
+    1. Create a feature branch or commit the last changes
+    2. Check the description/plan
+    3. Write or rewrite the implementation plan
+    4. Instruct the LLM not to make assumptions -> ask before assuming!
+    5. Check the implementation plan! Ask questions, let it modify
+    6. Start implementation
+    7. Test the implementation / check the code
 
-    1. Create feature branch or commit last changes
-    2. Check description / Plan 
-    3. Write or Rewrite Implementation plan
-    4. tell the llm not to assume things -> ask before assumption!
-    5. Check implementation plan! ask questions, let modify
-    6. start implementation
-    7. test implementaion / check code
-
-4. be iteratve:
-- use feature brancxhes often
-- let never generate to much at one time
-- instruct clearly, tell for clarification
+4. Be iterative:
+    - Use feature branches often
+    - Never generate too much at one time
+    - Provide clear instructions, ask for clarification when needed
 
 
 ## Prompt Examples
-- write a instruction plan for the following appliation <application_description.md> by following strict the rules:
-    - do not make assumptions, just ask for clarification, start writing if everything is clear
-    - explain each implementatio phase: what is it for, how does it works, what technology will be used
-    - write step by step so that a llm model and a human can follow and implement
-    
-- after each step, test everything, tell me how to test and what is done and how it works
-- looks good. go on with next setp. after each step, test everything, tell me what is done, how to test and how it works
-- beschreibe erstmal phase 4 im IMPLEMENTATION_PLAN, so das die feature und der umsetzungsplan klar ist.  
 
+- Write an instruction plan for the following application <application_description.md> by strictly following these rules:
+    - Do not make assumptions, just ask for clarification. Start writing only if everything is clear.
+    - Explain each implementation phase: what it is for, how it works, and what technology will be used.
+    - Write step by step so that both an LLM model and a human can follow and implement it.
+
+- After each step, test everything. Tell me how to test, what is done, and how it works.
+- Looks good. Go on with the next step. After each step, test everything. Tell me what is done, how to test, and how it works.
+- First, describe phase 4 in the IMPLEMENTATION_PLAN so that the features and the implementation plan are clear.
 
 
 
